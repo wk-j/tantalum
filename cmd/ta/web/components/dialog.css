@@ -1,0 +1,96 @@
+.dialog {
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  padding: 0;
+  overflow: auto;
+  color: var(--fg);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-lg);
+}
+
+.dialog-wide {
+  width: min(760px, calc(100vw - 32px));
+}
+
+.dialog[open] {
+  animation: dialog-in 0.14s ease-out;
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog[open] {
+    animation: none;
+  }
+}
+
+.dialog::backdrop {
+  background: rgb(15 23 42 / 0.45);
+  backdrop-filter: blur(2px);
+}
+
+.dialog-form {
+  display: grid;
+  gap: 16px;
+  padding: 20px 22px 0;
+}
+
+.dialog p {
+  margin: 0;
+}
+
+.dialog-head {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.dialog-head h2 {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.dialog-head .btn-icon {
+  margin: -4px -8px -4px 0;
+}
+
+.dialog-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  color: var(--muted);
+  background: var(--hover);
+  border-radius: 10px;
+}
+
+.dialog-icon .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.dialog-icon.tone-danger {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 4px -22px 0;
+  padding: 14px 22px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}

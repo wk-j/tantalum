@@ -107,4 +107,5 @@ security delete-generic-password -s tantalum -a "$HOME/.tantalum"
 go test ./...
 ```
 
-Decisions are ADRs in `docs/adr/`.
+Decisions are ADRs in `docs/adr/`. The web UI is plain ES modules in `cmd/ta/web/`, embedded in the binary
+with no build step; the header of `cmd/ta/web/app.js` maps its `lib/`, `components/` and `features/`.

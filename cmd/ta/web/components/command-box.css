@@ -1,0 +1,30 @@
+.command {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  height: 36px;
+  padding: 0 4px 0 10px;
+  font-weight: 400;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.command > .icon {
+  color: var(--subtle);
+}
+
+.command code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.command .btn-icon {
+  width: 28px;
+  height: 28px;
+}

@@ -1,0 +1,212 @@
+.matrix-wrap {
+  max-height: calc(100vh - 260px);
+  overflow: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.matrix {
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.matrix th,
+.matrix td {
+  padding: 0;
+  font-weight: inherit;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.matrix tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.matrix thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
+}
+
+.matrix tbody th,
+.matrix thead th.corner {
+  position: sticky;
+  left: 0;
+  border-right: 1px solid var(--border);
+}
+
+.matrix tbody th {
+  z-index: 1;
+  background: var(--panel);
+}
+
+.matrix thead th.corner {
+  z-index: 3;
+  height: 42px;
+  padding: 0 16px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.matrix tbody tr:hover > th,
+.matrix tbody tr:hover > td {
+  background: var(--hover);
+}
+
+/* Header and cell buttons fill their table cell. */
+.env-head,
+.name-head,
+.cell {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.env-head:focus-visible,
+.name-head:focus-visible,
+.cell:focus-visible {
+  outline-offset: -2px;
+}
+
+.env-head {
+  gap: 8px;
+  height: 42px;
+  padding: 0 12px 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.env-head:hover {
+  background: var(--hover);
+}
+
+.name-head {
+  gap: 8px;
+  height: 44px;
+  padding: 0 12px 0 16px;
+  text-align: left;
+}
+
+.name-head code {
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+/* The trailing icon hints that the header opens actions. */
+.env-head > .icon,
+.name-head > .icon {
+  margin-left: auto;
+  color: var(--subtle);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.name-head > .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.env-head:hover > .icon,
+.env-head:focus-visible > .icon,
+.matrix tbody tr:hover .name-head > .icon,
+.name-head:focus-visible > .icon {
+  opacity: 1;
+}
+
+.count {
+  min-width: 20px;
+  padding: 0 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+  color: var(--muted);
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.cell {
+  gap: 9px;
+  min-width: 136px;
+  height: 44px;
+  padding: 0 16px;
+}
+
+.cell .age {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.cell-set:hover .age {
+  color: var(--fg);
+}
+
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  background: var(--ok);
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px var(--ok-soft);
+}
+
+/* A gap must stay visible: without fallback (ADR 0004) it is a command that
+   fails in that environment. */
+.gap {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+  color: var(--muted);
+  border: 1px dashed color-mix(in srgb, var(--muted) 55%, transparent);
+  border-radius: 6px;
+}
+
+.gap-swatch {
+  width: 18px;
+  height: 12px;
+  border: 1px dashed color-mix(in srgb, var(--muted) 55%, transparent);
+  border-radius: 4px;
+}
+
+.gap .icon {
+  width: 12px;
+  height: 12px;
+}
+
+.gap .icon,
+.gap .add-label,
+.cell-gap:hover .gap-label,
+.cell-gap:focus-visible .gap-label {
+  display: none;
+}
+
+.cell-gap:hover .gap,
+.cell-gap:focus-visible .gap {
+  color: var(--accent-text);
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+
+.cell-gap:hover .gap .icon,
+.cell-gap:focus-visible .gap .icon,
+.cell-gap:hover .add-label,
+.cell-gap:focus-visible .add-label {
+  display: inline;
+}

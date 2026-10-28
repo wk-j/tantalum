@@ -1,0 +1,28 @@
+.search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search > .icon {
+  position: absolute;
+  left: 10px;
+  color: var(--subtle);
+  pointer-events: none;
+}
+
+.search .search-input {
+  width: 240px;
+  padding: 0 34px 0 32px;
+}
+
+.search kbd {
+  position: absolute;
+  right: 8px;
+  pointer-events: none;
+}
+
+.search:focus-within kbd,
+.search-input:not(:placeholder-shown) ~ kbd {
+  display: none;
+}

@@ -1,0 +1,32 @@
+.callout {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-top: 20px;
+  padding: 14px 16px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.callout > .icon {
+  margin-top: 2px;
+  color: var(--subtle);
+}
+
+.callout p {
+  margin: 0;
+}
+
+.callout code {
+  padding: 1px 5px;
+  font-size: 12px;
+  color: var(--fg);
+  white-space: nowrap;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
