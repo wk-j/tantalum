@@ -1,226 +1,98 @@
 # tantalum
 
-Local secret manager for AI coding agents (macOS). The command is `ta`, tantalum's chemical symbol.
+Local secret manager for AI coding agents on macOS. The command is `ta`.
 
-Agents need API keys and passwords to run commands, but everything an agent reads — `.env` files,
-command output, text pasted into chat — lands in its context, the model provider's logs, and session
-transcripts. tantalum lets an agent **use** a secret by name without ever **seeing** its value.
-
-- **Vault**: `~/.tantalum/vault.json`, AES-256-GCM. Secret names are encrypted too.
-- **Projects**: inside a git repository, `ta` uses that repository's own vault,
-  `~/.tantalum/projects/NAME-HASH`, keyed by the repository directory. Nothing to name or configure.
-- **Environments**: secrets are grouped into named environments such as `dev` and `prod`; the same
-  name can hold a different value in each.
-- **Key**: a random 256-bit key per vault in the macOS login Keychain (service `tantalum`, account =
-  vault directory).
-- **`run`**: starts a command with one environment's secrets as variables and pipes its stdout/stderr
-  through a redactor that replaces every value of the vault in use with `[REDACTED:ENV/NAME]`.
-- **`serve`**: a built-in web UI on `127.0.0.1` where a human adds, replaces, imports, copies, renames and
-  deletes secrets. Values are write-only there too.
-- **`reveal`**: shows one value to a human, on the terminal or the clipboard, after Touch ID (or an Apple
-  Watch or the login password) confirms they are at the Mac.
+Anything an agent reads — `.env` files, command output, pasted text — lands in its context, the
+provider's logs and session transcripts. With `ta`, an agent uses a secret by **name** and never sees
+its **value**.
 
 ## Install
 
 ```sh
-git clone https://github.com/wk-j/tantalum.git
-cd tantalum
-go install ./cmd/ta    # -> $(go env GOPATH)/bin/ta
+git clone https://github.com/wk-j/tantalum.git && cd tantalum
+go install ./cmd/ta    # needs the Xcode command line tools (cgo for Touch ID and the clipboard)
 ```
-
-Building needs the Xcode command line tools (`xcode-select --install`): `ta reveal` talks to Touch ID and
-the clipboard through cgo.
 
 ## Human: manage secrets
 
 ```sh
-ta init                        # once per vault (each git repository, plus the default): vault + Keychain key
-ta set GITHUB_TOKEN            # hidden prompt; paste the value, press Enter
-ta set -e prod DB_URL          # store in environment prod
-some-cli create-token | ta set X   # or pipe it; one trailing newline is dropped
-ta set TLS_KEY < key.pem       # multi-line values go through stdin
-ta list                        # ENV, NAME and last update per line, never values
+ta init                            # once per vault: creates it and its Keychain key
+ta set GITHUB_TOKEN                # hidden prompt; the value is never an argument
+ta set -e prod DB_URL              # environment prod (default: "default")
+some-cli create-token | ta set X   # or pipe it in; one trailing newline is dropped
+ta list                            # ENV, NAME, last update; never values
 ta rm -e prod DB_URL
+ta reveal [-e ENV] [-c] NAME       # after Touch ID/password: print to the terminal, or -c to clipboard
+ta serve                           # web UI on 127.0.0.1:7340; open the printed URL
 ```
 
-`set` never accepts the value as an argument, so it stays out of shell history and `ps`.
-Flags come before `NAME` (`ta set -e prod DB_URL`, not `ta set DB_URL -e prod`).
-Secret names must be valid shell variable names (`[A-Za-z_][A-Za-z0-9_]*`).
-
-### Reveal a value
-
-```sh
-ta reveal DB_URL               # shows the value on this terminal
-ta reveal -e prod -c DB_URL    # copies it to the clipboard instead
-```
-
-Before reading the value, `ta reveal` asks the Mac to confirm that you are there: Touch ID, or an Apple
-Watch or the login password on a Mac without a Touch ID sensor. The prompt names the secret and where it
-goes. The value is written to the terminal through `/dev/tty`, never to stdout, so a command or agent
-capturing `ta`'s output does not get it; without a terminal, `ta reveal` stops before asking and suggests
-`-c`. With `-c` the value goes on the clipboard, marked concealed so clipboard managers that honour the
-[nspasteboard.org](http://nspasteboard.org) convention keep no history, and is cleared after 45 seconds
-unless you copied something else in the meantime. A value shown on the terminal stays in its scrollback
-until you clear it (⌘K).
-
-Run `ta reveal` in your own terminal, not through an agent: an agent working in a terminal can read what
-appears there once you approve.
-
-### Environments
-
-`-e ENV` on `set`, `rm`, `run` and `reveal` picks the environment; without it they use `default`. An environment
-exists while it holds at least one secret: `ta set -e staging X` creates `staging`, and removing its
-last secret removes it. Environment names use letters, digits, `_` and `-`, starting with a letter or
-digit.
-
-Vaults created before environments existed (file `"version": 1`) keep working: their secrets load as
-environment `default`, and the next change rewrites the file as version 2. A `ta` built before
-environments cannot read version 2, so reinstall with `go install ./cmd/ta`.
-
-### Projects
-
-Inside a git repository, `ta` uses a vault that belongs to that repository:
-
-```sh
-cd ~/src/api
-ta init                        # once per repository: creates ~/.tantalum/projects/api-<hash>
-ta set -e prod DB_URL          # stored in the api repository's vault
-```
-
-The vault is keyed by the repository directory (the one holding `.git`). Every subdirectory and every
-`git worktree` of the repository uses the same vault, and so does the same directory reached through a
-symlink or with different letter case. Outside any repository, commands use the default vault in
-`~/.tantalum`. `ta list` and `ta serve` print which vault they use.
-
-Because the key is the directory, another clone is another project with its own vault, and moving or
-renaming the repository directory starts a new, empty vault. The old one stays in
-`~/.tantalum/projects/NAME-HASH` until you remove it.
-
-### Web UI
-
-```sh
-ta serve                       # loopback only, default 127.0.0.1:7340; -addr HOST:PORT to change
-```
-
-Open the printed `http://127.0.0.1:7340/#token=…` URL. The page is a table of every secret name against
-every environment, so a secret missing from an environment shows as an empty `+` cell. From it you can:
-
-- **Add** a secret to one or more environments at once, or to a new environment (click **Add secret**, or
-  an empty cell to fill that gap).
-- **Replace** or **delete** one value, and copy the `ta run` command for it: `ta run -e ENV -s NAME -- `,
-  or `ta run -s NAME -- ` in `default` (click a filled cell).
-- **Rename** a secret in every environment, or **delete it everywhere** (click its name).
-- **Copy** an environment's secrets into another one, new or existing, keeping or replacing secrets that
-  are already there; **rename** or **delete** an environment (click its column header).
-- **Import** a `.env` file, pasted or chosen from disk, into an environment, with a preview of new,
-  replaced and kept names and of lines that cannot be read. `export`, quotes (including multi-line `"…"`
-  with `\n` escapes) and `#` comments are understood; a later line wins over an earlier one.
-- **Filter** by name (`/` focuses the filter).
-
-No value is ever shown: no endpoint returns one, and copies and renames move values inside the vault only.
-One trailing newline from a paste is dropped. The page reloads the vault whenever its window regains
-focus, so changes made with the CLI appear. Ctrl-C stops the server. The header shows which vault the
-page manages; for several projects, run one `ta serve` per project, each with its own `-addr` port.
-
-Start `ta serve` in your own terminal, not through an agent: the printed URL is the key to the UI, and
-each run prints a new one.
-
-The page uses this JSON API; every call needs `Authorization: Bearer <token>`:
-
-| Request                              | Body                                | Response                                                              |
-| ------------------------------------ | ----------------------------------- | --------------------------------------------------------------------- |
-| `GET /api/vault`                     |                                     | `200` `{"root": "...", "dir": "..."}` (`root` `""` = default vault)   |
-| `GET /api/secrets`                   |                                     | `200` `[{"env": "...", "name": "...", "updated": "..."}]`             |
-| `PUT /api/secrets/{env}/{name}`      | `{"value": "..."}`                  | `204`; `400` bad environment, name, empty value or body               |
-| `DELETE /api/secrets/{env}/{name}`   |                                     | `204`; `404` not in the vault                                         |
-| `POST /api/envs/{env}/copy`          | `{"to": "...", "overwrite": false}` | `200` `{"copied": [names], "skipped": [names]}`; `404` no such source |
-| `POST /api/envs/{env}/rename`        | `{"to": "..."}`                     | `204`; `409` target exists; `404` no such environment                 |
-| `DELETE /api/envs/{env}`             |                                     | `204`; `404` no such environment                                      |
-| `POST /api/names/{name}/rename`      | `{"to": "..."}`                     | `204` renamed in every environment; `409` taken in any (no change)    |
-| `DELETE /api/names/{name}`           |                                     | `204` deleted from every environment; `404` in none                   |
-
-A copy or rename target that is not a valid environment or secret name, or that equals the source, gets
-`400`. `skipped` lists secrets that already existed in the target and were kept because `overwrite` was
-false.
-
-Errors are `{"error": "..."}`.
+Flags go before `NAME`; names are shell variable names (`[A-Za-z_][A-Za-z0-9_]*`). Run `reveal` and
+`serve` in your own terminal, not through an agent: the revealed value appears on that terminal, and the
+URL `serve` prints is the key to the UI.
 
 ## Agent: use secrets
 
 ```sh
-ta list
-ta run -s GITHUB_TOKEN -- gh api user                      # environment default
+ta run -s GITHUB_TOKEN -- gh api user
 ta run -e prod -s DB_URL -- sh -c 'psql "$DB_URL" -c "select 1"'
-ta run -s GH_TOKEN=GITHUB_TOKEN_WORK -- gh repo list      # VAR=NAME renames the variable
-ta run -s API_KEY -- sh -c 'curl -sH "Authorization: Bearer $API_KEY" https://api.example.com'
+ta run -s GH_TOKEN=GITHUB_TOKEN_WORK -- gh repo list    # VAR=NAME renames the variable
 ```
 
-The agent's own shell does not have `$API_KEY`; reference it inside single-quoted `sh -c '...'` so the
-child shell expands it.
+`run` passes secrets to the command as environment variables and replaces every vault value in its
+stdout/stderr with `[REDACTED:ENV/NAME]`. The variables exist only in the child, so reference them
+inside single-quoted `sh -c '...'`.
 
-### Connect your agent
-
-`skills/tantalum/SKILL.md` tells an agent how to work with `ta`. Install it where your agent loads
-skills, for example:
+Give your agent the rules in `skills/tantalum/SKILL.md`:
 
 ```sh
 ln -s "$PWD/skills/tantalum" ~/.agents/skills/tantalum     # omp
 ln -s "$PWD/skills/tantalum" ~/.claude/skills/tantalum     # Claude Code
 ```
 
-Agents without skill support: paste the rules section of that file into `AGENTS.md` / `CLAUDE.md`.
+Agents without skill support: paste its Rules section into `AGENTS.md` / `CLAUDE.md`.
+
+## How it works
+
+- **Vault**: `~/.tantalum/vault.json`, AES-256-GCM, names encrypted too. Each vault has a random
+  256-bit key in the login Keychain (service `tantalum`, account = vault directory).
+- **Projects**: inside a git repository, `ta` uses that repository's own vault,
+  `~/.tantalum/projects/NAME-HASH`, keyed by the repository directory; subdirectories and worktrees
+  share it, while another clone or a moved repository starts a new, empty one. Elsewhere `ta` uses the
+  default vault. `TANTALUM_HOME` moves `~/.tantalum`.
+- **Environments**: `-e ENV` on `set`, `rm`, `run` and `reveal`; one name can hold a different value per
+  environment. An environment exists while it holds a secret.
+- **Web UI**: a grid of names × environments to add, replace, import `.env` files, copy, rename and
+  delete. Values are write-only: no endpoint returns one.
+- Writes lock the vault and replace it atomically, so parallel agents, terminals and the web UI are safe.
 
 ## Threat model
 
-Protects against:
+Protects against secret values reaching an agent's context, logs or transcripts through command output;
+plaintext `.env` files an agent can read or commit; and a copied vault file, useless without the
+Keychain key.
 
-- Secret values reaching the agent's context, provider logs, or transcripts through command output.
-- Plaintext secrets in `.env` files that an agent can read or commit.
-- A copied vault file (backups, sync): it is useless without the Keychain key.
+Does **not** protect against a hostile agent: it runs as your user, so it can encode a value before
+printing it, write it to a file, send it over the network, or read the key with
+`security find-generic-password`. Contain one with a separate OS user or a sandbox/VM.
 
-Does **not** protect against a deliberately hostile agent. The agent runs code as your user, so it can
-transform a value before printing it (`base64`, `rev`), write it to a file, send it over the network, or
-read the key with `security find-generic-password`. Redaction matches literal values on stdout/stderr
-only; it does not see what the child writes to `/dev/tty` or to files. To contain an untrusted agent,
-run it as a separate OS user or inside a sandbox/VM.
+- Redaction matches literal values on stdout/stderr only, not `/dev/tty` or files. It covers every
+  environment of the vault in use, not other projects' vaults. Very short values are redacted wherever
+  they appear.
+- The command sees pipes, not a TTY: no colors or progress bars, possible output buffering.
+- `reveal` waits for a system prompt an agent cannot answer; approving one you did not start hands the
+  value to whoever did. It writes to `/dev/tty`, never stdout. A clipboard copy is marked concealed and
+  cleared after 45 seconds unless something else was copied.
+- The web UI listens on loopback with a new 256-bit token per run, carried in the URL fragment. It
+  rejects foreign `Host`/`Origin` headers and serves a strict CSP. A process holding the token can
+  change secrets but not read them.
 
-`ta reveal` shows a value only after the Mac's Touch ID or password prompt, which an agent cannot answer.
-Approving a prompt you did not start hands the value to whoever started it, so read what the prompt says.
+Exit status: `ta`'s own errors exit `125`; `run` exits with the command's status (`126` not executable,
+`127` not found, `128+N` killed by signal N) and forwards SIGINT, SIGTERM, SIGHUP and SIGQUIT.
 
-The web UI listens on loopback only and creates a new 256-bit token per run. The token travels in the
-URL fragment, which the browser never sends to the server, and the page keeps it in the tab's
-`sessionStorage`. Requests whose `Host` or `Origin` is not the server itself are rejected, which blocks
-other websites and DNS rebinding, and pages are served with a strict Content-Security-Policy. A local
-process that gets the token can add, replace, copy, rename or delete secrets, but cannot read a value.
-
-Picking the vault from the working directory grants nothing: anyone who can run `ta` can run it in any
-repository's directory.
-
-## Behavior notes
-
-- `run` redacts **every** value in the vault it uses, in every environment, not only the injected ones
-  (catches a token that also sits in a config file the command prints, or a `prod` value while running
-  with `dev`). Other projects' vaults are not loaded, so their values are not redacted. A value shorter
-  than a few characters will be redacted wherever it appears in output.
-- A secret split across two output chunks is still caught: bytes that could start a secret are held
-  until the next chunk or the end of the stream.
-- The child's stdout/stderr are pipes, so it sees no TTY: expect no colors or progress bars and possible
-  output buffering. stdin is passed through unchanged.
-- `set`, `rm` and web UI writes take an exclusive lock and replace the vault atomically (temp file,
-  fsync, rename), so parallel agents, terminals and the web UI do not lose each other's changes.
-- The hidden prompt reads raw input, so pasted values longer than macOS's 1024-byte line limit are not
-  truncated. Ctrl-C or Ctrl-D cancels without storing.
-
-Exit status: errors from `ta` itself exit `125`. `run` exits with the command's status: `126` not
-executable, `127` not found, `128+N` killed by signal N. SIGINT, SIGTERM, SIGHUP and SIGQUIT are
-forwarded to the command.
-
-`TANTALUM_HOME` moves the default vault and `projects/` (default `~/.tantalum`).
-
-### Remove a vault
+## Remove a vault
 
 ```sh
-# one project: `ta list` inside the repository prints its vault directory
+# a project (`ta list` prints its directory)
 rm -rf ~/.tantalum/projects/api-1a2b3c4d5e6f
 security delete-generic-password -s tantalum -a "$HOME/.tantalum/projects/api-1a2b3c4d5e6f"
 
@@ -235,7 +107,4 @@ security delete-generic-password -s tantalum -a "$HOME/.tantalum"
 go test ./...
 ```
 
-Decisions are recorded as ADRs in `docs/adr/`. Each ADR's **Rails** section lists rules the code must keep;
-a rule tagged `check:NAME` is enforced by the `[[check]]` of that name in `.krypton/rails.toml`, which runs
-Go tests in `cmd/ta` (mostly `TestRails*` in `rails_test.go`), so `go test ./...` covers them too. Renaming
-such a test needs the same change in `rails.toml`, or its check matches no test and passes silently.
+Decisions are ADRs in `docs/adr/`.
