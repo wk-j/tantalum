@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -182,4 +183,28 @@ func TestServerCopiesRenamesAndDeletesEnvironmentsAndNames(t *testing.T) {
 	call("DELETE", "/api/envs/staging", "", http.StatusNoContent)
 	call("DELETE", "/api/envs/staging", "", http.StatusNotFound)
 	expect("deleting staging", "dev/B")
+}
+
+// A second ta serve, for another project, must not fail on the default port,
+// but an address the human chose with -addr must not silently change.
+func TestListenServeFallsBackOnlyFromTheDefaultAddress(t *testing.T) {
+	taken, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer taken.Close()
+	addr := taken.Addr().String()
+
+	if ln, err := listenServe(addr, false); err == nil {
+		ln.Close()
+		t.Errorf("-addr %s is in use: listened anyway; want an error", addr)
+	}
+	ln, err := listenServe(addr, true)
+	if err != nil {
+		t.Fatalf("default address %s is in use: %v; want a free port", addr, err)
+	}
+	defer ln.Close()
+	if got := ln.Addr().(*net.TCPAddr); !got.IP.IsLoopback() || got.String() == addr {
+		t.Errorf("fallback listens on %s; want another loopback port", got)
+	}
 }

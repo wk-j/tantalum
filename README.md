@@ -23,7 +23,7 @@ some-cli create-token | ta set X   # or pipe it in; one trailing newline is drop
 ta list                            # ENV, NAME, last update; never values
 ta rm -e prod DB_URL
 ta reveal [-e ENV] [-c] NAME       # after Touch ID/password: print to the terminal, or -c to clipboard
-ta serve                           # web UI on 127.0.0.1:7340; open the printed URL
+ta serve                           # web UI on 127.0.0.1:7340, or a free port if taken; open the printed URL
 ```
 
 Flags go before `NAME`; names are shell variable names (`[A-Za-z_][A-Za-z0-9_]*`). Run `reveal` and

@@ -49,7 +49,9 @@ func cmdServe(args []string) error {
 	if err != nil {
 		return err
 	}
-	ln, err := net.Listen("tcp", *addr)
+	explicit := false
+	flags.Visit(func(f *flag.Flag) { explicit = explicit || f.Name == "addr" })
+	ln, err := listenServe(*addr, !explicit)
 	if err != nil {
 		return err
 	}
@@ -79,6 +81,17 @@ func cmdServe(args []string) error {
 		return err
 	}
 	return nil
+}
+
+// listenServe listens on addr. When addr is the default and another process,
+// such as ta serve for another project, already holds it, it listens on a free
+// loopback port instead; an address given with -addr is never swapped.
+func listenServe(addr string, fallback bool) (net.Listener, error) {
+	ln, err := net.Listen("tcp", addr)
+	if fallback && errors.Is(err, syscall.EADDRINUSE) {
+		return net.Listen("tcp", "127.0.0.1:0")
+	}
+	return ln, err
 }
 
 // server is the web UI backend. Its API is write-only for values: it lists
