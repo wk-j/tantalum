@@ -7,10 +7,11 @@ status: accepted
 Humans manage secrets in a browser through `ta serve`, an HTTP server built into `ta` (Go `net/http`, page
 embedded in the binary). Every local process, agents included, can reach localhost, so an endpoint that
 returned a value would undo [ADR 0001](0001-agents-use-secrets-by-name.md): the API lists environments, names
-and update times, stores and deletes secrets, and never returns a value. The server listens on loopback only,
+and update times, stores, copies, renames and deletes secrets (copies and renames move values inside the vault
+only), and never returns a value. The server listens on loopback only,
 creates a new random token per run that reaches the browser in the URL fragment, and rejects requests whose
 `Host` or `Origin` is not the server itself, which blocks other websites and DNS rebinding. A leaked token
-lets its holder add, replace or delete secrets, but not read one.
+lets its holder add, replace, copy, rename or delete secrets, but not read one.
 
 Recorded in the Krypton timeline as `tl-20261028T041258Z-379c11`.
 

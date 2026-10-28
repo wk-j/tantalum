@@ -8,8 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -192,6 +195,110 @@ func (v *vault) remove(env, name string) error {
 		delete(envs[env], name)
 		if len(envs[env]) == 0 {
 			delete(envs, env)
+		}
+		return nil
+	})
+}
+
+var errExists = errors.New("already exists")
+
+// copyEnv copies every secret of environment from into environment to.
+// Secrets that already exist in to are kept, and reported as skipped, unless
+// overwrite is set. Values move only inside the vault.
+func (v *vault) copyEnv(from, to string, overwrite bool) (copied, skipped []string, err error) {
+	copied, skipped = []string{}, []string{}
+	err = v.update(func(envs environments) error {
+		src, ok := envs[from]
+		if !ok {
+			return fmt.Errorf("environment %s is %w", from, errSecretNotFound)
+		}
+		if envs[to] == nil {
+			envs[to] = map[string]secret{}
+		}
+		now := time.Now().UTC()
+		for _, name := range slices.Sorted(maps.Keys(src)) {
+			if _, exists := envs[to][name]; exists && !overwrite {
+				skipped = append(skipped, name)
+				continue
+			}
+			s := src[name]
+			s.Updated = now
+			envs[to][name] = s
+			copied = append(copied, name)
+		}
+		return nil
+	})
+	return copied, skipped, err
+}
+
+func (v *vault) renameEnv(from, to string) error {
+	return v.update(func(envs environments) error {
+		if _, ok := envs[from]; !ok {
+			return fmt.Errorf("environment %s is %w", from, errSecretNotFound)
+		}
+		if _, ok := envs[to]; ok {
+			return fmt.Errorf("environment %s %w", to, errExists)
+		}
+		envs[to] = envs[from]
+		delete(envs, from)
+		return nil
+	})
+}
+
+func (v *vault) removeEnv(env string) error {
+	return v.update(func(envs environments) error {
+		if _, ok := envs[env]; !ok {
+			return fmt.Errorf("environment %s is %w", env, errSecretNotFound)
+		}
+		delete(envs, env)
+		return nil
+	})
+}
+
+// renameSecret renames a secret in every environment that has it. If the new
+// name is taken in any of them, nothing changes.
+func (v *vault) renameSecret(from, to string) error {
+	return v.update(func(envs environments) error {
+		var found, taken []string
+		for _, env := range slices.Sorted(maps.Keys(envs)) {
+			if _, ok := envs[env][from]; !ok {
+				continue
+			}
+			found = append(found, env)
+			if _, ok := envs[env][to]; ok {
+				taken = append(taken, env)
+			}
+		}
+		if len(found) == 0 {
+			return fmt.Errorf("%s is %w", from, errSecretNotFound)
+		}
+		if len(taken) > 0 {
+			return fmt.Errorf("%s %w in %s", to, errExists, strings.Join(taken, ", "))
+		}
+		for _, env := range found {
+			envs[env][to] = envs[env][from]
+			delete(envs[env], from)
+		}
+		return nil
+	})
+}
+
+// removeSecretEverywhere deletes a secret from every environment that has it.
+func (v *vault) removeSecretEverywhere(name string) error {
+	return v.update(func(envs environments) error {
+		found := false
+		for env, secrets := range envs {
+			if _, ok := secrets[name]; !ok {
+				continue
+			}
+			found = true
+			delete(secrets, name)
+			if len(secrets) == 0 {
+				delete(envs, env)
+			}
+		}
+		if !found {
+			return fmt.Errorf("%s is %w", name, errSecretNotFound)
 		}
 		return nil
 	})

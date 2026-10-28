@@ -15,8 +15,8 @@ transcripts. tantalum lets an agent **use** a secret by name without ever **seei
   vault directory).
 - **`run`**: starts a command with one environment's secrets as variables and pipes its stdout/stderr
   through a redactor that replaces every value of the vault in use with `[REDACTED:ENV/NAME]`.
-- **`serve`**: a built-in web UI on `127.0.0.1` where a human adds, replaces and deletes secrets.
-  Values are write-only there too.
+- **`serve`**: a built-in web UI on `127.0.0.1` where a human adds, replaces, imports, copies, renames and
+  deletes secrets. Values are write-only there too.
 
 ## Install
 
@@ -76,23 +76,45 @@ renaming the repository directory starts a new, empty vault. The old one stays i
 ta serve                       # loopback only, default 127.0.0.1:7340; -addr HOST:PORT to change
 ```
 
-Open the printed `http://127.0.0.1:7340/#token=…` URL. The page shows one tab per environment with
-names and update times, saves a new or replacement value in any environment (type a new environment
-name to create it; one trailing newline from a paste is dropped), and deletes secrets. It never shows a
-value: no endpoint returns one. Ctrl-C stops the server. The header shows which vault the page manages;
-for several projects, run one `ta serve` per project, each with its own `-addr` port.
+Open the printed `http://127.0.0.1:7340/#token=…` URL. The page is a table of every secret name against
+every environment, so a secret missing from an environment shows as an empty `+` cell. From it you can:
+
+- **Add** a secret to one or more environments at once, or to a new environment (click **Add secret**, or
+  an empty cell to fill that gap).
+- **Replace** or **delete** one value, and copy the `ta run -e ENV -s NAME -- ` command for it (click a
+  filled cell).
+- **Rename** a secret in every environment, or **delete it everywhere** (click its name).
+- **Copy** an environment's secrets into another one, new or existing, keeping or replacing secrets that
+  are already there; **rename** or **delete** an environment (click its column header).
+- **Import** a `.env` file, pasted or chosen from disk, into an environment, with a preview of new,
+  replaced and kept names and of lines that cannot be read. `export`, quotes (including multi-line `"…"`
+  with `\n` escapes) and `#` comments are understood; a later line wins over an earlier one.
+- **Filter** by name (`/` focuses the filter).
+
+No value is ever shown: no endpoint returns one, and copies and renames move values inside the vault only.
+One trailing newline from a paste is dropped. The page reloads the vault whenever its window regains
+focus, so changes made with the CLI appear. Ctrl-C stops the server. The header shows which vault the
+page manages; for several projects, run one `ta serve` per project, each with its own `-addr` port.
 
 Start `ta serve` in your own terminal, not through an agent: the printed URL is the key to the UI, and
 each run prints a new one.
 
 The page uses this JSON API; every call needs `Authorization: Bearer <token>`:
 
-| Request                            | Body               | Response                                                  |
-| ---------------------------------- | ------------------ | --------------------------------------------------------- |
-| `GET /api/vault`                   |                    | `200` `{"root": "...", "dir": "..."}` (`root` `""` = default vault) |
-| `GET /api/secrets`                 |                    | `200` `[{"env": "...", "name": "...", "updated": "..."}]` |
-| `PUT /api/secrets/{env}/{name}`    | `{"value": "..."}` | `204`; `400` bad environment, name, empty value or body   |
-| `DELETE /api/secrets/{env}/{name}` |                    | `204`; `404` not in the vault                             |
+| Request                              | Body                                | Response                                                              |
+| ------------------------------------ | ----------------------------------- | --------------------------------------------------------------------- |
+| `GET /api/vault`                     |                                     | `200` `{"root": "...", "dir": "..."}` (`root` `""` = default vault)   |
+| `GET /api/secrets`                   |                                     | `200` `[{"env": "...", "name": "...", "updated": "..."}]`             |
+| `PUT /api/secrets/{env}/{name}`      | `{"value": "..."}`                  | `204`; `400` bad environment, name, empty value or body               |
+| `DELETE /api/secrets/{env}/{name}`   |                                     | `204`; `404` not in the vault                                         |
+| `POST /api/envs/{env}/copy`          | `{"to": "...", "overwrite": false}` | `200` `{"copied": [names], "skipped": [names]}`; `404` no such source |
+| `POST /api/envs/{env}/rename`        | `{"to": "..."}`                     | `204`; `409` target exists; `404` no such environment                 |
+| `DELETE /api/envs/{env}`             |                                     | `204`; `404` no such environment                                      |
+| `POST /api/names/{name}/rename`      | `{"to": "..."}`                     | `204` renamed in every environment; `409` taken in any (no change)    |
+| `DELETE /api/names/{name}`           |                                     | `204` deleted from every environment; `404` in none                   |
+
+Copy and rename targets must differ from the source (`400` otherwise). `skipped` lists secrets that already
+existed in the target and were kept because `overwrite` was false.
 
 Errors are `{"error": "..."}`.
 
@@ -139,7 +161,7 @@ The web UI listens on loopback only and creates a new 256-bit token per run. The
 URL fragment, which the browser never sends to the server, and the page keeps it in the tab's
 `sessionStorage`. Requests whose `Host` or `Origin` is not the server itself are rejected, which blocks
 other websites and DNS rebinding, and pages are served with a strict Content-Security-Policy. A local
-process that gets the token can add, replace or delete secrets, but cannot read a value.
+process that gets the token can add, replace, copy, rename or delete secrets, but cannot read a value.
 
 Picking the vault from the working directory grants nothing: anyone who can run `ta` can run it in any
 repository's directory.

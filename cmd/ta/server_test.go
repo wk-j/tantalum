@@ -133,3 +133,53 @@ func TestServerKeepsEnvironmentsSeparate(t *testing.T) {
 		t.Fatalf("second delete: %d, want 404", rec.Code)
 	}
 }
+
+func TestServerCopiesRenamesAndDeletesEnvironmentsAndNames(t *testing.T) {
+	h := newTestServer(t)
+	auth := map[string]string{"Authorization": "Bearer " + testToken}
+	call := func(method, path, body string, want int) string {
+		t.Helper()
+		rec := serve(h, method, path, body, testHost, auth)
+		if rec.Code != want {
+			t.Fatalf("%s %s %s: status %d, want %d (%s)", method, path, body, rec.Code, want, rec.Body)
+		}
+		return strings.TrimSpace(rec.Body.String())
+	}
+	expect := func(step string, want ...string) {
+		t.Helper()
+		if got := listSecrets(t, h); !slices.Equal(got, want) {
+			t.Fatalf("after %s: %v, want %v", step, got, want)
+		}
+	}
+	for _, p := range []string{"dev/A", "dev/B", "prod/A"} {
+		call("PUT", "/api/secrets/"+p, `{"value":"v-`+p+`"}`, http.StatusNoContent)
+	}
+
+	if got := call("POST", "/api/envs/dev/copy", `{"to":"prod"}`, http.StatusOK); got != `{"copied":["B"],"skipped":["A"]}` {
+		t.Fatalf("copy without overwrite answered %s", got)
+	}
+	if got := call("POST", "/api/envs/dev/copy", `{"to":"prod","overwrite":true}`, http.StatusOK); got != `{"copied":["A","B"],"skipped":[]}` {
+		t.Fatalf("copy with overwrite answered %s", got)
+	}
+	call("POST", "/api/envs/dev/copy", `{"to":"dev"}`, http.StatusBadRequest)
+	call("POST", "/api/envs/nope/copy", `{"to":"x"}`, http.StatusNotFound)
+
+	call("POST", "/api/envs/prod/rename", `{"to":"dev"}`, http.StatusConflict)
+	call("POST", "/api/envs/prod/rename", `{"to":"staging"}`, http.StatusNoContent)
+	expect("renaming prod to staging", "dev/A", "dev/B", "staging/A", "staging/B")
+
+	// A taken name in any environment leaves every environment unchanged.
+	call("POST", "/api/names/A/rename", `{"to":"B"}`, http.StatusConflict)
+	expect("a refused rename", "dev/A", "dev/B", "staging/A", "staging/B")
+	call("POST", "/api/names/A/rename", `{"to":"9X"}`, http.StatusBadRequest)
+	call("POST", "/api/names/A/rename", `{"to":"C"}`, http.StatusNoContent)
+	expect("renaming A to C", "dev/B", "dev/C", "staging/B", "staging/C")
+
+	call("DELETE", "/api/names/C", "", http.StatusNoContent)
+	call("DELETE", "/api/names/C", "", http.StatusNotFound)
+	expect("deleting C everywhere", "dev/B", "staging/B")
+
+	call("DELETE", "/api/envs/staging", "", http.StatusNoContent)
+	call("DELETE", "/api/envs/staging", "", http.StatusNotFound)
+	expect("deleting staging", "dev/B")
+}

@@ -8,49 +8,152 @@
   <script src="app.js" defer></script>
 </head>
 <body>
-  <main>
-    <header>
+  <header class="topbar">
+    <div class="brand">
       <h1>tantalum</h1>
       <p id="vault" class="vault"></p>
-      <p class="muted">Values are write-only here: you can add, replace and delete secrets, but no value is
-        ever shown. Agents use them with <code>ta run -e ENV -s NAME -- …</code>.</p>
-    </header>
+    </div>
+    <div class="toolbar">
+      <input id="search" type="search" placeholder="Filter by name   /" aria-label="Filter secrets by name"
+        spellcheck="false" autocapitalize="off" autocomplete="off">
+      <button id="import-button" type="button">Import .env</button>
+      <button id="add-button" type="button" class="primary">Add secret</button>
+    </div>
+  </header>
 
+  <main>
     <p id="status" role="status" hidden></p>
 
-    <section>
-      <h2>Add or replace a secret</h2>
-      <form id="secret-form" autocomplete="off">
-        <div class="row">
-          <label>Environment
-            <input id="env" required pattern="[A-Za-z0-9][A-Za-z0-9_\-]*" list="env-list" value="default"
-              title="Letters, digits, _ and -, starting with a letter or digit" spellcheck="false" autocapitalize="off">
-            <datalist id="env-list"></datalist>
-          </label>
-          <label>Name
-            <input id="name" required pattern="[A-Za-z_][A-Za-z0-9_]*" placeholder="GITHUB_TOKEN"
-              title="Letters, digits and _, not starting with a digit" spellcheck="false" autocapitalize="off">
-          </label>
-        </div>
-        <label>Value
-          <textarea id="value" required rows="3" placeholder="Paste the secret value" spellcheck="false"
-            autocapitalize="off"></textarea>
-        </label>
-        <button type="submit">Save</button>
-      </form>
+    <section id="empty" class="empty" hidden>
+      <h2>No secrets yet</h2>
+      <p>Add a secret, or import an existing <code>.env</code> file so it no longer has to live in the repository.</p>
+      <div class="row">
+        <button type="button" data-open="import">Import .env</button>
+        <button type="button" class="primary" data-open="add">Add secret</button>
+      </div>
     </section>
 
-    <section>
-      <h2>Secrets</h2>
-      <nav id="envs" class="tabs" aria-label="Environments" hidden></nav>
-      <table id="secrets" hidden>
+    <div id="matrix-wrap" class="matrix-wrap" hidden>
+      <table id="matrix">
         <thead>
-          <tr><th>Name</th><th>Updated</th><th></th></tr>
+          <tr></tr>
         </thead>
         <tbody></tbody>
       </table>
-      <p id="empty" class="muted" hidden>No secrets yet.</p>
-    </section>
+    </div>
+    <p id="no-match" class="muted" hidden>No secret matches the filter.</p>
+
+    <p class="note">Values are write-only: this page adds, replaces, copies, renames and deletes secrets, but never
+      shows a value. Click a cell to replace or delete that value, a name to rename it, an environment to copy,
+      rename or delete it. Agents use a secret with <code>ta run -e ENV -s NAME -- …</code>.</p>
   </main>
+
+  <datalist id="env-list"></datalist>
+
+  <dialog id="secret-dialog" aria-labelledby="secret-title">
+    <form id="secret-form" autocomplete="off">
+      <h2 id="secret-title">Add secret</h2>
+      <label>Name
+        <input id="secret-name" required pattern="[A-Za-z_][A-Za-z0-9_]*" placeholder="GITHUB_TOKEN"
+          title="Letters, digits and _, not starting with a digit" spellcheck="false" autocapitalize="off">
+      </label>
+      <fieldset id="secret-envs">
+        <legend>Environments</legend>
+        <div id="secret-env-options" class="chips"></div>
+        <input id="secret-new-env" pattern="[A-Za-z0-9][A-Za-z0-9_\-]*" placeholder="new environment, e.g. staging"
+          aria-label="New environment" title="Letters, digits, _ and -, starting with a letter or digit"
+          spellcheck="false" autocapitalize="off">
+      </fieldset>
+      <label>Value
+        <textarea id="secret-value" required rows="4" placeholder="Paste the secret value" spellcheck="false"
+          autocapitalize="off"></textarea>
+      </label>
+      <p class="hint">One trailing newline from a paste is dropped. The value is never shown again.</p>
+      <div class="dialog-actions">
+        <button type="button" id="secret-delete" class="danger" hidden>Delete</button>
+        <button type="button" id="secret-copy-command" hidden>Copy run command</button>
+        <span class="spacer"></span>
+        <button type="button" data-close>Cancel</button>
+        <button type="submit" id="secret-submit" class="primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="name-dialog" aria-labelledby="name-title">
+    <form id="name-form" autocomplete="off">
+      <h2 id="name-title">Secret</h2>
+      <p id="name-summary" class="muted"></p>
+      <label>New name
+        <input id="name-target" required pattern="[A-Za-z_][A-Za-z0-9_]*"
+          title="Letters, digits and _, not starting with a digit" spellcheck="false" autocapitalize="off">
+      </label>
+      <p class="hint">Renames the secret in every environment. Commands and agents that use the old name stop
+        finding it.</p>
+      <div class="dialog-actions">
+        <button type="button" id="name-delete" class="danger">Delete everywhere</button>
+        <span class="spacer"></span>
+        <button type="button" data-close>Cancel</button>
+        <button type="submit" class="primary">Rename</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="env-dialog" aria-labelledby="env-title">
+    <form id="env-form" autocomplete="off">
+      <h2 id="env-title">Environment</h2>
+      <p id="env-summary" class="muted"></p>
+      <label>Target environment
+        <input id="env-target" required pattern="[A-Za-z0-9][A-Za-z0-9_\-]*" list="env-list"
+          placeholder="e.g. staging" title="Letters, digits, _ and -, starting with a letter or digit"
+          spellcheck="false" autocapitalize="off">
+      </label>
+      <label class="check"><input type="checkbox" id="env-overwrite"> When copying, replace secrets that already
+        exist in the target</label>
+      <div class="dialog-actions">
+        <button type="button" id="env-delete" class="danger">Delete environment</button>
+        <span class="spacer"></span>
+        <button type="button" data-close>Cancel</button>
+        <button type="button" id="env-rename">Rename</button>
+        <button type="submit" class="primary">Copy secrets</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="import-dialog" class="wide" aria-labelledby="import-title">
+    <form id="import-form" autocomplete="off">
+      <h2 id="import-title">Import .env</h2>
+      <div class="row">
+        <label class="grow">Environment
+          <input id="import-env" required pattern="[A-Za-z0-9][A-Za-z0-9_\-]*" list="env-list"
+            title="Letters, digits, _ and -, starting with a letter or digit" spellcheck="false" autocapitalize="off">
+        </label>
+        <label class="file">Choose file…<input id="import-file" type="file" accept=".env,.txt,text/plain"></label>
+      </div>
+      <label>Contents
+        <textarea id="import-text" rows="9" spellcheck="false" autocapitalize="off"
+          placeholder="DB_URL=postgres://…&#10;export API_KEY=&quot;…&quot;   # comments are fine"></textarea>
+      </label>
+      <label class="check"><input type="checkbox" id="import-overwrite"> Replace secrets that already exist in this
+        environment</label>
+      <div id="import-preview" class="preview" aria-live="polite"></div>
+      <div class="dialog-actions">
+        <span class="spacer"></span>
+        <button type="button" data-close>Cancel</button>
+        <button type="submit" id="import-submit" class="primary" disabled>Import</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title">
+    <form id="confirm-form">
+      <h2 id="confirm-title"></h2>
+      <p id="confirm-message"></p>
+      <div class="dialog-actions">
+        <span class="spacer"></span>
+        <button type="button" data-close>Cancel</button>
+        <button type="submit" id="confirm-ok" class="danger">Delete</button>
+      </div>
+    </form>
+  </dialog>
 </body>
 </html>

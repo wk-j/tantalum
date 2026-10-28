@@ -869,6 +869,11 @@ func railsRoutes(t *testing.T) []railsRequest {
 		railsRequest{"GET", "/api/secrets", ""},
 		railsRequest{"PUT", "/api/secrets/dev/RAILS", `{"value":"v"}`},
 		railsRequest{"DELETE", "/api/secrets/dev/RAILS", ""},
+		railsRequest{"POST", "/api/envs/dev/copy", `{"to":"rails-copy"}`},
+		railsRequest{"POST", "/api/envs/rails-copy/rename", `{"to":"rails-renamed"}`},
+		railsRequest{"DELETE", "/api/envs/rails-renamed", ""},
+		railsRequest{"POST", "/api/names/API_KEY/rename", `{"to":"RAILS_KEY"}`},
+		railsRequest{"DELETE", "/api/names/RAILS_KEY", ""},
 	)
 }
 

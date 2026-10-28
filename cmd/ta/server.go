@@ -82,7 +82,8 @@ func cmdServe(args []string) error {
 }
 
 // server is the web UI backend. Its API is write-only for values: it lists
-// environments, names and update times, stores and deletes secrets, and never
+// environments, names and update times, stores, copies, renames and deletes
+// secrets (copies and renames move values inside the vault only), and never
 // returns a value.
 type server struct {
 	vault *vault
@@ -105,6 +106,11 @@ func newServer(v *vault, token string, hosts []string) http.Handler {
 	mux.HandleFunc("GET /api/secrets", s.list)
 	mux.HandleFunc("PUT /api/secrets/{env}/{name}", s.put)
 	mux.HandleFunc("DELETE /api/secrets/{env}/{name}", s.delete)
+	mux.HandleFunc("POST /api/envs/{env}/copy", s.copyEnv)
+	mux.HandleFunc("POST /api/envs/{env}/rename", s.renameEnv)
+	mux.HandleFunc("DELETE /api/envs/{env}", s.deleteEnv)
+	mux.HandleFunc("POST /api/names/{name}/rename", s.renameName)
+	mux.HandleFunc("DELETE /api/names/{name}", s.deleteName)
 	return s.guard(mux)
 }
 
@@ -202,14 +208,85 @@ func (s *server) put(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) delete(w http.ResponseWriter, r *http.Request) {
-	err := s.vault.remove(r.PathValue("env"), r.PathValue("name"))
+	writeResult(w, s.vault.remove(r.PathValue("env"), r.PathValue("name")))
+}
+
+// target is the body of copy and rename requests.
+type target struct {
+	To        string `json:"to"`
+	Overwrite bool   `json:"overwrite"`
+}
+
+func readTarget(w http.ResponseWriter, r *http.Request) (target, bool) {
+	var t target
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxRequestBody)).Decode(&t); err != nil {
+		writeError(w, http.StatusBadRequest, `body must be JSON {"to": "..."}`)
+		return t, false
+	}
+	return t, true
+}
+
+// envTarget reads the destination environment of a copy or rename.
+func envTarget(w http.ResponseWriter, r *http.Request) (target, bool) {
+	t, ok := readTarget(w, r)
+	if ok && (!validSlug(t.To) || t.To == r.PathValue("env")) {
+		writeError(w, http.StatusBadRequest, "invalid target environment: use letters, digits, _ and -, starting with a letter or digit, and not the source")
+		return t, false
+	}
+	return t, ok
+}
+
+func (s *server) copyEnv(w http.ResponseWriter, r *http.Request) {
+	t, ok := envTarget(w, r)
+	if !ok {
+		return
+	}
+	copied, skipped, err := s.vault.copyEnv(r.PathValue("env"), t.To, t.Overwrite)
+	if err != nil {
+		writeResult(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string][]string{"copied": copied, "skipped": skipped})
+}
+
+func (s *server) renameEnv(w http.ResponseWriter, r *http.Request) {
+	if t, ok := envTarget(w, r); ok {
+		writeResult(w, s.vault.renameEnv(r.PathValue("env"), t.To))
+	}
+}
+
+func (s *server) deleteEnv(w http.ResponseWriter, r *http.Request) {
+	writeResult(w, s.vault.removeEnv(r.PathValue("env")))
+}
+
+func (s *server) renameName(w http.ResponseWriter, r *http.Request) {
+	t, ok := readTarget(w, r)
+	if !ok {
+		return
+	}
+	if !validName(t.To) || t.To == r.PathValue("name") {
+		writeError(w, http.StatusBadRequest, "invalid new name: use letters, digits and _, not starting with a digit, and not the current name")
+		return
+	}
+	writeResult(w, s.vault.renameSecret(r.PathValue("name"), t.To))
+}
+
+func (s *server) deleteName(w http.ResponseWriter, r *http.Request) {
+	writeResult(w, s.vault.removeSecretEverywhere(r.PathValue("name")))
+}
+
+// writeResult answers a change: 204, or the status that fits the vault error.
+func writeResult(w http.ResponseWriter, err error) {
 	switch {
+	case err == nil:
+		w.WriteHeader(http.StatusNoContent)
 	case errors.Is(err, errSecretNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
-	case err != nil:
-		writeError(w, http.StatusInternalServerError, err.Error())
+	case errors.Is(err, errExists):
+		writeError(w, http.StatusConflict, err.Error())
 	default:
-		w.WriteHeader(http.StatusNoContent)
+		writeError(w, http.StatusInternalServerError, err.Error())
 	}
 }
 

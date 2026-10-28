@@ -6,7 +6,7 @@ status: accepted
 
 Secrets are grouped into named environments such as `dev` and `prod`, so one name can hold a different value
 in each: `-e ENV` on `set`, `rm` and `run` (default `default`), `ta list` shows every environment, the web UI
-has one tab per environment and the API is `/api/secrets/{env}/{name}`. A secret missing from the selected
+shows every secret name against every environment, so a gap is visible, and the API is `/api/secrets/{env}/{name}`. A secret missing from the selected
 environment is an error and is never taken from `default` or another environment: storing a shared token in
 each environment costs less than an agent silently running against another environment's value. The vault
 format became version 2; version 1 vaults still load, as environment `default`, and are rewritten as
