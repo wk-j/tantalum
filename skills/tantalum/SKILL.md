@@ -50,6 +50,7 @@ environments such as `dev` and `prod`. You can use a secret by **name**; you mus
 
 - Exit status `125` is an error from `ta` itself (message on stderr); any other status is the
   command's own.
-- Output of `ta run` is piped: the command sees no TTY (no colors or progress bars).
+- Unless your shell runs in a terminal, `ta run` gives the command pipes, not a TTY: no colours or
+  progress bars.
 - Long-running processes (dev servers) should be started as `ta run -s ... -- server`, not
   backgrounded inside `sh -c`.

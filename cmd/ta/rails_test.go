@@ -363,14 +363,20 @@ func TestRailsSecretValuesReachOnlyChildEnvAndRedactor(t *testing.T) {
 }
 
 // docs/adr/0001: cmd.Stdout and cmd.Stderr of `ta run` are redactors over every
-// environment that vault.load returned. TestRedactorAcrossWriteBoundaries
-// covers what a redactor does with them.
+// environment that vault.load returned, or the child's end of a feed that such
+// a redactor reads: redactor.terminal for a child on its own pseudo-terminal
+// (which carries both streams, so it may be either stream's redactor), or
+// redactor.pipe for a stream of that child redirected away from the terminal.
+// TestRedactorAcrossWriteBoundaries covers what a redactor does with them, and
+// TestTerminalFeedRedactsChildOutput what a terminal feed does.
 func TestRailsRunRedactsEveryEnvironment(t *testing.T) {
 	p := railsLoad(t)
 	fd := p.funcDecl(t, "cmdRun")
 	d := p.defs(fd)
 	newRedactor := p.lookup(t, "newRedactor")
-	isRedactor := func(src ast.Expr, stream string) bool {
+	childField := p.field(t, "feed", "child")
+	// isRedactor reports whether src is newRedactor(os.<one of streams>, envs).
+	isRedactor := func(src ast.Expr, streams ...string) bool {
 		call, ok := src.(*ast.CallExpr)
 		if !ok || len(call.Args) != 2 {
 			return false
@@ -382,7 +388,7 @@ func TestRailsRunRedactsEveryEnvironment(t *testing.T) {
 		if !ok {
 			return false
 		}
-		if obj := p.info.Uses[w.Sel]; obj == nil || obj.Pkg() == nil || obj.Pkg().Path() != "os" || obj.Name() != stream {
+		if obj := p.info.Uses[w.Sel]; obj == nil || obj.Pkg() == nil || obj.Pkg().Path() != "os" || !slices.Contains(streams, obj.Name()) {
 			return false
 		}
 		envs := p.sources(d, call.Args[1], map[types.Object]bool{})
@@ -393,6 +399,41 @@ func TestRailsRunRedactsEveryEnvironment(t *testing.T) {
 			}
 		}
 		return len(envs) > 0
+	}
+	// isFeed reports whether src is f.child of a feed f that R.terminal or
+	// R.pipe started, with R a redactor over stream (either stream for terminal).
+	isFeed := func(src ast.Expr, stream string) bool {
+		sel, ok := src.(*ast.SelectorExpr)
+		if !ok || p.info.Selections[sel] == nil || p.info.Selections[sel].Obj() != childField {
+			return false
+		}
+		feeds := p.sources(d, sel.X, map[types.Object]bool{})
+		for _, f := range feeds {
+			call, ok := f.(*ast.CallExpr)
+			if !ok {
+				return false
+			}
+			var streams []string
+			switch fn := p.callee(call); {
+			case railsIs(fn, "main", "redactor", "terminal"):
+				streams = []string{"Stdout", "Stderr"}
+			case railsIs(fn, "main", "redactor", "pipe"):
+				streams = []string{stream}
+			default:
+				return false
+			}
+			recv := ast.Unparen(call.Fun).(*ast.SelectorExpr).X
+			redactors := p.sources(d, recv, map[types.Object]bool{})
+			for _, r := range redactors {
+				if !isRedactor(r, streams...) {
+					return false
+				}
+			}
+			if len(redactors) == 0 {
+				return false
+			}
+		}
+		return len(feeds) > 0
 	}
 	set := map[string]bool{}
 	ast.Inspect(fd.Body, func(n ast.Node) bool {
@@ -419,8 +460,9 @@ func TestRailsRunRedactsEveryEnvironment(t *testing.T) {
 				continue
 			}
 			for _, src := range p.sources(d, as.Rhs[i], map[types.Object]bool{}) {
-				if !isRedactor(src, stream) {
-					t.Errorf("%s: cmd.%s gets %s; want newRedactor(os.%s, envs) with envs straight from vault.load",
+				if !isRedactor(src, stream) && !isFeed(src, stream) {
+					t.Errorf("%s: cmd.%s gets %s; want newRedactor(os.%s, envs) with envs straight from vault.load, "+
+						"or the child's end of a feed that such a redactor's terminal or pipe method started",
 						p.pos(as), stream, p.describe(src), stream)
 				}
 			}

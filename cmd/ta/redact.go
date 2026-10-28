@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"io"
 	"slices"
+	"strings"
 )
 
 // redactor is an io.Writer that replaces every secret value with
@@ -23,7 +24,9 @@ type redaction struct {
 	label []byte
 }
 
-// newRedactor redacts the values of every environment, labelled ENV/NAME.
+// newRedactor redacts the values of every environment, labelled ENV/NAME. A
+// value with line breaks is also matched with \r\n for \n, as a terminal
+// shows it (output processing of a pseudo-terminal, see redactor.terminal).
 func newRedactor(w io.Writer, envs environments) *redactor {
 	r := &redactor{w: w}
 	for env, secrets := range envs {
@@ -31,7 +34,11 @@ func newRedactor(w io.Writer, envs environments) *redactor {
 			if s.Value == "" { // would match everywhere without consuming input
 				continue
 			}
-			r.secrets = append(r.secrets, redaction{value: []byte(s.Value), label: []byte("[REDACTED:" + env + "/" + name + "]")})
+			label := []byte("[REDACTED:" + env + "/" + name + "]")
+			r.secrets = append(r.secrets, redaction{value: []byte(s.Value), label: label})
+			if crlf := strings.ReplaceAll(s.Value, "\n", "\r\n"); crlf != s.Value {
+				r.secrets = append(r.secrets, redaction{value: []byte(crlf), label: label})
+			}
 			r.first[s.Value[0]] = true
 		}
 	}

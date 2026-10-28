@@ -42,7 +42,8 @@ usage:
   ta rm [-e ENV] NAME     delete a secret
   ta run [-e ENV] -s SPEC... -- COMMAND [ARGS...]
                           run COMMAND with secrets of ENV as variables; every
-                          vault value is redacted from its stdout and stderr.
+                          vault value is redacted from its stdout and stderr,
+                          which are a terminal of its own when ta runs in one.
                           SPEC is NAME (variable NAME) or VAR=NAME (variable VAR)
   ta reveal [-e ENV] [-c] NAME
                           for humans: after Touch ID (or an Apple Watch or the
@@ -324,7 +325,62 @@ func cmdRun(args []string) (int, error) {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
+	// When ta runs in a terminal, the child gets a pseudo-terminal of its own
+	// in its place, so it behaves as when run there directly (colours,
+	// progress bars, pagers, prompts); what it shows still goes through the
+	// redactors. A stream redirected away from the terminal stays a pipe.
+	// Without a terminal (agents, pipelines) the child gets pipes only.
+	var term *feed
+	var feeds []*feed
+	closeFeeds := func() error {
+		var errs []error
+		for _, f := range feeds {
+			errs = append(errs, f.wait())
+		}
+		return errors.Join(errs...)
+	}
+	outTerm := isTerminal(os.Stdin) && sameFile(os.Stdin, os.Stdout)
+	errTerm := isTerminal(os.Stdin) && sameFile(os.Stdin, os.Stderr)
+	if outTerm || errTerm {
+		shows := stdout // the redactor that writes to ta's terminal
+		if !outTerm {
+			shows = stderr
+		}
+		// Ctrl-Z for the child's own group: stop it, so that waitStopping
+		// hands the terminal back to the shell.
+		suspend := func(foreground int) bool {
+			return foreground == cmd.Process.Pid && syscall.Kill(-foreground, syscall.SIGSTOP) == nil
+		}
+		t, err := shows.terminal(os.Stdin, suspend)
+		if err != nil {
+			return 0, err
+		}
+		term = t
+		feeds = append(feeds, t)
+		cmd.Stdin = t.child
+		cmd.Stdout, cmd.Stderr = t.child, t.child
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
+		if !outTerm {
+			p, err := stdout.pipe()
+			if err != nil {
+				closeFeeds()
+				return 0, err
+			}
+			feeds = append(feeds, p)
+			cmd.Stdout = p.child
+		}
+		if !errTerm {
+			p, err := stderr.pipe()
+			if err != nil {
+				closeFeeds()
+				return 0, err
+			}
+			feeds = append(feeds, p)
+			cmd.Stderr = p.child
+		}
+	}
 	if err := cmd.Start(); err != nil {
+		closeFeeds()
 		fmt.Fprintf(os.Stderr, "ta: %v\n", err)
 		if errors.Is(err, fs.ErrPermission) {
 			return 126, nil
@@ -339,17 +395,25 @@ func cmdRun(args []string) (int, error) {
 			cmd.Process.Signal(s)
 		}
 	}()
-	waitErr := cmd.Wait()
+	var status syscall.WaitStatus
+	var waitErr error
+	if term != nil {
+		term.resume()
+		status, waitErr = waitStopping(cmd.Process, term)
+	} else if waitErr = cmd.Wait(); cmd.ProcessState != nil {
+		status = cmd.ProcessState.Sys().(syscall.WaitStatus)
+	}
 	signal.Stop(sigs)
 
-	if err := errors.Join(stdout.Flush(), stderr.Flush()); err != nil {
+	// The feeds must be through before the redactors flush what they hold
+	// back; closing the terminal feed also gives ta's terminal back.
+	if err := errors.Join(closeFeeds(), stdout.Flush(), stderr.Flush()); err != nil {
 		return 0, err
 	}
 	var exitErr *exec.ExitError
 	if waitErr != nil && !errors.As(waitErr, &exitErr) {
 		return 0, waitErr
 	}
-	status := cmd.ProcessState.Sys().(syscall.WaitStatus)
 	if status.Signaled() {
 		return 128 + int(status.Signal()), nil
 	}

@@ -11,6 +11,7 @@ func TestRedactorAcrossWriteBoundaries(t *testing.T) {
 			"SHORT": {Value: "abc"},
 			"LONG":  {Value: "abcdef"},
 			"TOKEN": {Value: "tok-123"},
+			"PEM":   {Value: "-----A-----\nkey\n-----B-----"},
 		},
 		"prod": {
 			"DB_URL": {Value: "pg://prod"},
@@ -27,6 +28,8 @@ func TestRedactorAcrossWriteBoundaries(t *testing.T) {
 		{"prefix only at end is emitted on flush", "tail tok-12", "tail tok-12"},
 		{"value from another environment", "url=pg://prod", "url=[REDACTED:prod/DB_URL]"},
 		{"no secrets", "plain output", "plain output"},
+		{"multi-line value", "pem=-----A-----\nkey\n-----B----- end", "pem=[REDACTED:dev/PEM] end"},
+		{"multi-line value as a terminal shows it", "pem=-----A-----\r\nkey\r\n-----B-----\r\n", "pem=[REDACTED:dev/PEM]\r\n"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
