@@ -57,14 +57,16 @@ var loadRailsPackage = sync.OnceValues(func() (*railsPackage, error) {
 			Selections: map[*ast.SelectorExpr]*types.Selection{},
 		},
 	}
-	for _, name := range bp.GoFiles {
+	// The cgo files (Touch ID prompt, clipboard) are type-checked too; their
+	// C.* references are accepted without a C toolchain.
+	for _, name := range append(bp.GoFiles, bp.CgoFiles...) {
 		f, err := parser.ParseFile(p.fset, name, nil, 0)
 		if err != nil {
 			return nil, err
 		}
 		p.files = append(p.files, f)
 	}
-	conf := types.Config{Importer: importer.ForCompiler(p.fset, "gc", nil)}
+	conf := types.Config{Importer: importer.ForCompiler(p.fset, "gc", nil), FakeImportC: true}
 	p.pkg, err = conf.Check("main", p.fset, p.files, p.info)
 	return p, err
 })
@@ -336,7 +338,7 @@ func TestRailsSecretValuesReachOnlyChildEnvAndRedactor(t *testing.T) {
 	p := railsLoad(t)
 	secretType := p.lookup(t, "secret").Type()
 	valueField := p.field(t, "secret", "Value")
-	readers := []string{"cmdRun", "newRedactor"}
+	readers := []string{"cmdRun", "newRedactor", "cmdReveal"}
 	codecs := []string{"vault.load", "vault.save"}
 	p.inspect(func(n ast.Node, fd *ast.FuncDecl) {
 		fn := railsName(fd)
@@ -1063,12 +1065,12 @@ func TestRailsOwnErrorsArePrefixedTa(t *testing.T) {
 
 // docs/adr/0002
 func TestRailsDocsInvokeTheCommandAsTa(t *testing.T) {
-	oldName := regexp.MustCompile(`\btantalum\s+(init|set|list|rm|run|serve|help)\b`)
+	oldName := regexp.MustCompile(`\btantalum\s+(init|set|list|rm|run|reveal|serve|help)\b`)
 	bp, err := build.ImportDir(".", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	paths := append([]string{filepath.Join("..", "..", "README.md")}, bp.GoFiles...)
+	paths := append([]string{filepath.Join("..", "..", "README.md")}, append(bp.GoFiles, bp.CgoFiles...)...)
 	for _, root := range []string{"web", filepath.Join("..", "..", "skills")} {
 		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 			if err == nil && !d.IsDir() {
@@ -1090,5 +1092,157 @@ func TestRailsDocsInvokeTheCommandAsTa(t *testing.T) {
 				t.Errorf("%s:%d: %q; the command is ta", path, i+1, m)
 			}
 		}
+	}
+}
+
+// docs/adr/0005: cmdReveal reads a value only after confirmUser approved, and
+// confirmUser is the system prompt rather than a stand-in.
+func TestRailsRevealAsksBeforeReadingAValue(t *testing.T) {
+	p := railsLoad(t)
+	fd := p.funcDecl(t, "cmdReveal")
+	confirm := p.lookup(t, "confirmUser")
+	valueField := p.field(t, "secret", "Value")
+
+	// gate is the end of `if err := confirmUser(...); err != nil { ...; return ... }`.
+	var gate token.Pos
+	ast.Inspect(fd.Body, func(n ast.Node) bool {
+		ifs, ok := n.(*ast.IfStmt)
+		if !ok || gate.IsValid() || len(ifs.Body.List) == 0 {
+			return true
+		}
+		init, ok := ifs.Init.(*ast.AssignStmt)
+		if !ok || len(init.Rhs) != 1 {
+			return true
+		}
+		call, ok := ast.Unparen(init.Rhs[0]).(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		if id, ok := ast.Unparen(call.Fun).(*ast.Ident); !ok || p.info.Uses[id] != confirm {
+			return true
+		}
+		if _, ok := ifs.Body.List[len(ifs.Body.List)-1].(*ast.ReturnStmt); ok {
+			gate = ifs.End()
+		}
+		return true
+	})
+	if !gate.IsValid() {
+		t.Fatal("cmdReveal has no `if err := confirmUser(...); err != nil { return ... }`")
+	}
+	ast.Inspect(fd.Body, func(n ast.Node) bool {
+		if sel, ok := n.(*ast.SelectorExpr); ok {
+			if s := p.info.Selections[sel]; s != nil && s.Obj() == valueField && sel.Pos() < gate {
+				t.Errorf("%s: cmdReveal reads a value before confirmUser approved", p.pos(sel))
+			}
+		}
+		return true
+	})
+
+	presence := p.lookup(t, "confirmUserPresence")
+	wired := false
+	p.inspect(func(n ast.Node, fd *ast.FuncDecl) {
+		spec, ok := n.(*ast.ValueSpec)
+		if !ok || fd != nil {
+			return
+		}
+		for i, name := range spec.Names {
+			if p.info.Defs[name] != confirm {
+				continue
+			}
+			if i < len(spec.Values) {
+				id, ok := ast.Unparen(spec.Values[i]).(*ast.Ident)
+				wired = ok && p.info.Uses[id] == presence
+			}
+		}
+	})
+	if !wired {
+		t.Error("confirmUser is not initialised to confirmUserPresence, the system prompt")
+	}
+}
+
+// docs/adr/0005: cmdReveal hands the value only to fmt.Fprint* on a file
+// opened from /dev/tty, or to copyToClipboard; never to stdout or stderr.
+func TestRailsRevealWritesTheValueOnlyToTheTerminalOrClipboard(t *testing.T) {
+	p := railsLoad(t)
+	fd := p.funcDecl(t, "cmdReveal")
+	d := p.defs(fd)
+	valueField := p.field(t, "secret", "Value")
+	copyFn := p.lookup(t, "copyToClipboard")
+
+	held := map[types.Object]bool{} // variables assigned a value
+	for obj, defs := range d {
+		for _, e := range defs {
+			if sel, ok := ast.Unparen(e).(*ast.SelectorExpr); ok {
+				if s := p.info.Selections[sel]; s != nil && s.Obj() == valueField {
+					held[obj] = true
+				}
+			}
+		}
+	}
+	if len(held) == 0 {
+		t.Fatal("cmdReveal never assigns a value to a variable; this test follows that variable")
+	}
+	openedTTY := func(e ast.Expr) bool {
+		opened := false
+		for _, src := range p.sources(d, e, map[types.Object]bool{}) {
+			if src == nil {
+				continue // the zero value of `var tty *os.File`
+			}
+			c, ok := src.(*ast.CallExpr)
+			if !ok || !railsIs(p.callee(c), "os", "", "OpenFile") || len(c.Args) == 0 {
+				return false
+			}
+			if lit, ok := ast.Unparen(c.Args[0]).(*ast.BasicLit); !ok || lit.Value != `"/dev/tty"` {
+				return false
+			}
+			opened = true
+		}
+		return opened
+	}
+	ast.PreorderStack(fd.Body, nil, func(n ast.Node, stack []ast.Node) bool {
+		id, ok := n.(*ast.Ident)
+		if !ok || !held[p.info.Uses[id]] {
+			return true
+		}
+		if call, ok := stack[len(stack)-1].(*ast.CallExpr); ok && slices.Contains(call.Args, ast.Expr(id)) {
+			f := p.callee(call)
+			if f != nil && types.Object(f) == copyFn {
+				return true
+			}
+			for _, name := range []string{"Fprint", "Fprintln", "Fprintf"} {
+				if railsIs(f, "fmt", "", name) && call.Args[0] != ast.Expr(id) && openedTTY(call.Args[0]) {
+					return true
+				}
+			}
+		}
+		t.Errorf("%s: cmdReveal hands the value to %s; only a file opened from /dev/tty or copyToClipboard may get it",
+			p.pos(id), p.describe(stack[len(stack)-1]))
+		return true
+	})
+}
+
+// docs/adr/0005: the clipboard is cleared only when nothing was copied after
+// the revealed value. A private pasteboard keeps the real clipboard untouched.
+func TestRailsRevealClipboardClearsOnlyWhenUnchanged(t *testing.T) {
+	old := pasteboardName
+	pasteboardName = fmt.Sprintf("dev.tantalum.rails.%d", os.Getpid())
+	t.Cleanup(func() { pasteboardName = old })
+
+	revealed, err := copyToClipboard("rails-revealed-value")
+	if err != nil {
+		t.Fatal(err)
+	}
+	later, err := copyToClipboard("copied-later")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if clearClipboardIfUnchanged(revealed) {
+		t.Error("cleared the clipboard although something was copied after the revealed value")
+	}
+	if !clearClipboardIfUnchanged(later) {
+		t.Error("kept a value that nothing replaced")
+	}
+	if _, err := copyToClipboard("\xff\xfe not utf-8"); err == nil {
+		t.Error("copied bytes that are not UTF-8 text")
 	}
 }

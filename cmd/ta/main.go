@@ -44,10 +44,16 @@ usage:
                           run COMMAND with secrets of ENV as variables; every
                           vault value is redacted from its stdout and stderr.
                           SPEC is NAME (variable NAME) or VAR=NAME (variable VAR)
+  ta reveal [-e ENV] [-c] NAME
+                          for humans: after Touch ID (or an Apple Watch or the
+                          login password) shows the value on the terminal, or
+                          with -c copies it to the clipboard and clears the
+                          clipboard after 45 seconds; never writes it to stdout
   ta serve [-addr HOST:PORT]
-                          web UI for humans to add, replace and delete secrets
-                          (default 127.0.0.1:7340, loopback only); open the
-                          printed URL, which carries this run's access token
+                          web UI for humans to add, replace, import, copy,
+                          rename and delete secrets (default 127.0.0.1:7340,
+                          loopback only); open the printed URL, which carries
+                          this run's access token
 
 -e ENV picks an environment: a named set of secrets such as dev or prod
 (default "default"). An environment exists while it holds secrets.
@@ -86,6 +92,10 @@ func main() {
 		}
 	case "serve":
 		err = cmdServe(args)
+	case "reveal":
+		err = cmdReveal(args)
+	case clearClipboardCommand:
+		err = cmdClearClipboard(args)
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 		return

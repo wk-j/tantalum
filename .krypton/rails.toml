@@ -88,3 +88,20 @@ timeout_s = 120
 name = "rails.vault-unknown-version"
 argv = ["go", "test", "-run", "^TestRailsUnknownVaultVersionIsNeverOverwritten$", "./cmd/ta"]
 timeout_s = 120
+
+# docs/adr/0005-reveal-after-user-presence.md
+
+[[check]]
+name = "rails.reveal-asks-first"
+argv = ["go", "test", "-run", "^TestRailsRevealAsksBeforeReadingAValue$", "./cmd/ta"]
+timeout_s = 120
+
+[[check]]
+name = "rails.reveal-sinks"
+argv = ["go", "test", "-run", "^TestRailsRevealWritesTheValueOnlyToTheTerminalOrClipboard$", "./cmd/ta"]
+timeout_s = 120
+
+[[check]]
+name = "rails.reveal-clipboard-clears"
+argv = ["go", "test", "-run", "^TestRailsRevealClipboardClearsOnlyWhenUnchanged$", "./cmd/ta"]
+timeout_s = 120

@@ -18,7 +18,7 @@ Recorded in the Krypton timeline as `tl-20261028T041258Z-379c11`.
 ## Considered Options
 
 - A "reveal" button for humans: rejected; any local process holding the token could call the same endpoint.
-  A forgotten value is fetched again from its source and replaced.
+  A person who needs a value back uses `ta reveal`, which asks the Mac first ([ADR 0005](0005-reveal-after-user-presence.md)).
 
 ## Rails
 

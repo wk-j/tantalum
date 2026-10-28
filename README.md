@@ -17,17 +17,24 @@ transcripts. tantalum lets an agent **use** a secret by name without ever **seei
   through a redactor that replaces every value of the vault in use with `[REDACTED:ENV/NAME]`.
 - **`serve`**: a built-in web UI on `127.0.0.1` where a human adds, replaces, imports, copies, renames and
   deletes secrets. Values are write-only there too.
+- **`reveal`**: shows one value to a human, on the terminal or the clipboard, after Touch ID (or an Apple
+  Watch or the login password) confirms they are at the Mac.
 
 ## Install
 
 ```sh
+git clone https://github.com/wk-j/tantalum.git
+cd tantalum
 go install ./cmd/ta    # -> $(go env GOPATH)/bin/ta
 ```
+
+Building needs the Xcode command line tools (`xcode-select --install`): `ta reveal` talks to Touch ID and
+the clipboard through cgo.
 
 ## Human: manage secrets
 
 ```sh
-ta init                        # once: create vault + Keychain key
+ta init                        # once per vault (each git repository, plus the default): vault + Keychain key
 ta set GITHUB_TOKEN            # hidden prompt; paste the value, press Enter
 ta set -e prod DB_URL          # store in environment prod
 some-cli create-token | ta set X   # or pipe it; one trailing newline is dropped
@@ -40,9 +47,28 @@ ta rm -e prod DB_URL
 Flags come before `NAME` (`ta set -e prod DB_URL`, not `ta set DB_URL -e prod`).
 Secret names must be valid shell variable names (`[A-Za-z_][A-Za-z0-9_]*`).
 
+### Reveal a value
+
+```sh
+ta reveal DB_URL               # shows the value on this terminal
+ta reveal -e prod -c DB_URL    # copies it to the clipboard instead
+```
+
+Before reading the value, `ta reveal` asks the Mac to confirm that you are there: Touch ID, or an Apple
+Watch or the login password on a Mac without a Touch ID sensor. The prompt names the secret and where it
+goes. The value is written to the terminal through `/dev/tty`, never to stdout, so a command or agent
+capturing `ta`'s output does not get it; without a terminal, `ta reveal` stops before asking and suggests
+`-c`. With `-c` the value goes on the clipboard, marked concealed so clipboard managers that honour the
+[nspasteboard.org](http://nspasteboard.org) convention keep no history, and is cleared after 45 seconds
+unless you copied something else in the meantime. A value shown on the terminal stays in its scrollback
+until you clear it (⌘K).
+
+Run `ta reveal` in your own terminal, not through an agent: an agent working in a terminal can read what
+appears there once you approve.
+
 ### Environments
 
-`-e ENV` on `set`, `rm` and `run` picks the environment; without it they use `default`. An environment
+`-e ENV` on `set`, `rm`, `run` and `reveal` picks the environment; without it they use `default`. An environment
 exists while it holds at least one secret: `ta set -e staging X` creates `staging`, and removing its
 last secret removes it. Environment names use letters, digits, `_` and `-`, starting with a letter or
 digit.
@@ -81,8 +107,8 @@ every environment, so a secret missing from an environment shows as an empty `+`
 
 - **Add** a secret to one or more environments at once, or to a new environment (click **Add secret**, or
   an empty cell to fill that gap).
-- **Replace** or **delete** one value, and copy the `ta run -e ENV -s NAME -- ` command for it (click a
-  filled cell).
+- **Replace** or **delete** one value, and copy the `ta run` command for it: `ta run -e ENV -s NAME -- `,
+  or `ta run -s NAME -- ` in `default` (click a filled cell).
 - **Rename** a secret in every environment, or **delete it everywhere** (click its name).
 - **Copy** an environment's secrets into another one, new or existing, keeping or replacing secrets that
   are already there; **rename** or **delete** an environment (click its column header).
@@ -113,8 +139,9 @@ The page uses this JSON API; every call needs `Authorization: Bearer <token>`:
 | `POST /api/names/{name}/rename`      | `{"to": "..."}`                     | `204` renamed in every environment; `409` taken in any (no change)    |
 | `DELETE /api/names/{name}`           |                                     | `204` deleted from every environment; `404` in none                   |
 
-Copy and rename targets must differ from the source (`400` otherwise). `skipped` lists secrets that already
-existed in the target and were kept because `overwrite` was false.
+A copy or rename target that is not a valid environment or secret name, or that equals the source, gets
+`400`. `skipped` lists secrets that already existed in the target and were kept because `overwrite` was
+false.
 
 Errors are `{"error": "..."}`.
 
@@ -156,6 +183,9 @@ transform a value before printing it (`base64`, `rev`), write it to a file, send
 read the key with `security find-generic-password`. Redaction matches literal values on stdout/stderr
 only; it does not see what the child writes to `/dev/tty` or to files. To contain an untrusted agent,
 run it as a separate OS user or inside a sandbox/VM.
+
+`ta reveal` shows a value only after the Mac's Touch ID or password prompt, which an agent cannot answer.
+Approving a prompt you did not start hands the value to whoever started it, so read what the prompt says.
 
 The web UI listens on loopback only and creates a new 256-bit token per run. The token travels in the
 URL fragment, which the browser never sends to the server, and the page keeps it in the tab's
@@ -204,3 +234,8 @@ security delete-generic-password -s tantalum -a "$HOME/.tantalum"
 ```sh
 go test ./...
 ```
+
+Decisions are recorded as ADRs in `docs/adr/`. Each ADR's **Rails** section lists rules the code must keep;
+a rule tagged `check:NAME` is enforced by the `[[check]]` of that name in `.krypton/rails.toml`, which runs
+Go tests in `cmd/ta` (mostly `TestRails*` in `rails_test.go`), so `go test ./...` covers them too. Renaming
+such a test needs the same change in `rails.toml`, or its check matches no test and passes silently.
