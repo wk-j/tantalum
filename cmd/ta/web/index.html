@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>tantalum</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>tantalum</h1>
+      <p id="vault" class="vault"></p>
+      <p class="muted">Values are write-only here: you can add, replace and delete secrets, but no value is
+        ever shown. Agents use them with <code>ta run -e ENV -s NAME -- …</code>.</p>
+    </header>
+
+    <p id="status" role="status" hidden></p>
+
+    <section>
+      <h2>Add or replace a secret</h2>
+      <form id="secret-form" autocomplete="off">
+        <div class="row">
+          <label>Environment
+            <input id="env" required pattern="[A-Za-z0-9][A-Za-z0-9_\-]*" list="env-list" value="default"
+              title="Letters, digits, _ and -, starting with a letter or digit" spellcheck="false" autocapitalize="off">
+            <datalist id="env-list"></datalist>
+          </label>
+          <label>Name
+            <input id="name" required pattern="[A-Za-z_][A-Za-z0-9_]*" placeholder="GITHUB_TOKEN"
+              title="Letters, digits and _, not starting with a digit" spellcheck="false" autocapitalize="off">
+          </label>
+        </div>
+        <label>Value
+          <textarea id="value" required rows="3" placeholder="Paste the secret value" spellcheck="false"
+            autocapitalize="off"></textarea>
+        </label>
+        <button type="submit">Save</button>
+      </form>
+    </section>
+
+    <section>
+      <h2>Secrets</h2>
+      <nav id="envs" class="tabs" aria-label="Environments" hidden></nav>
+      <table id="secrets" hidden>
+        <thead>
+          <tr><th>Name</th><th>Updated</th><th></th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <p id="empty" class="muted" hidden>No secrets yet.</p>
+    </section>
+  </main>
+</body>
+</html>
