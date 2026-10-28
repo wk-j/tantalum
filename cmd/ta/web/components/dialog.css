@@ -1,13 +1,15 @@
+/* A dialog is a paper sheet with a brushed metal title bar and footer. */
 .dialog {
   width: min(520px, calc(100vw - 32px));
   max-height: calc(100vh - 48px);
   padding: 0;
   overflow: auto;
   color: var(--fg);
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  box-shadow: var(--shadow-lg);
+  background-color: var(--paper);
+  background-image: var(--paper-texture);
+  border: 1px solid var(--metal-edge);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--lifted);
 }
 
 .dialog-wide {
@@ -15,13 +17,13 @@
 }
 
 .dialog[open] {
-  animation: dialog-in 0.14s ease-out;
+  animation: dialog-in 0.16s ease-out;
 }
 
 @keyframes dialog-in {
   from {
     opacity: 0;
-    transform: translateY(6px) scale(0.98);
+    transform: translateY(-8px) scale(0.98);
   }
 }
 
@@ -32,14 +34,13 @@
 }
 
 .dialog::backdrop {
-  background: rgb(15 23 42 / 0.45);
-  backdrop-filter: blur(2px);
+  background: radial-gradient(ellipse at center, rgb(0 0 0 / 0.25), rgb(0 0 0 / 0.6));
 }
 
 .dialog-form {
   display: grid;
   gap: 16px;
-  padding: 20px 22px 0;
+  padding: 0 22px;
 }
 
 .dialog p {
@@ -50,28 +51,34 @@
   display: flex;
   gap: 12px;
   align-items: center;
+  margin: 0 -22px;
+  padding: 10px 14px 10px 22px;
+  background: var(--metal-texture), var(--metal);
+  border-bottom: 1px solid var(--metal-edge);
+  box-shadow: inset 0 1px 0 var(--bevel-hi);
 }
 
 .dialog-head h2 {
   flex: 1;
-  font-size: 16px;
-  font-weight: 650;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--metal-ink);
+  text-shadow: var(--emboss);
   overflow-wrap: anywhere;
 }
 
-.dialog-head .btn-icon {
-  margin: -4px -8px -4px 0;
-}
-
+/* A round enamel badge for the dialog's tone. */
 .dialog-icon {
   display: grid;
   flex: none;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   color: var(--muted);
-  background: var(--hover);
-  border-radius: 10px;
+  background: var(--button);
+  border: 1px solid var(--button-edge);
+  border-radius: 50%;
+  box-shadow: var(--raised);
 }
 
 .dialog-icon .icon {
@@ -80,8 +87,14 @@
 }
 
 .dialog-icon.tone-danger {
-  color: var(--danger);
-  background: var(--danger-soft);
+  color: #ffffff;
+  background: var(--gloss-danger);
+  border-color: var(--gloss-danger-edge);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.45), 0 1px 3px rgb(0 0 0 / 0.35);
+}
+
+.dialog-icon.tone-danger .icon {
+  filter: drop-shadow(0 -1px 0 rgb(0 0 0 / 0.35));
 }
 
 .dialog-actions {
@@ -90,7 +103,8 @@
   gap: 8px;
   align-items: center;
   margin: 4px -22px 0;
-  padding: 14px 22px;
-  background: var(--surface);
-  border-top: 1px solid var(--border);
+  padding: 12px 22px;
+  background: var(--metal-texture), var(--metal);
+  border-top: 1px solid var(--metal-edge);
+  box-shadow: inset 0 1px 0 var(--bevel-hi);
 }

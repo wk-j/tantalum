@@ -1,8 +1,8 @@
 import { h, icon } from "../lib/dom.js";
 
-// Logo is tantalum's periodic-table tile: atomic number 73, symbol Ta.
-const Logo = () =>
-  h("span", { class: "logo", "aria-hidden": "true" }, h("span", { class: "logo-number", textContent: "73" }), "Ta");
+// Logo is tantalum's element symbol, Ta, on a metal tile; it names the app
+// for screen readers and on hover.
+const Logo = () => h("span", { class: "logo", role: "img", "aria-label": "tantalum", title: "tantalum", textContent: "Ta" });
 
 // Topbar shows the brand, which vault the page manages, and the page tools
 // (search, buttons) on the right.
@@ -19,7 +19,6 @@ export class Topbar {
           "div",
           { class: "brand" },
           Logo(),
-          h("span", { class: "wordmark", textContent: "tantalum" }),
           h("span", { class: "divider", "aria-hidden": "true" }),
           this.vault,
         ),

@@ -1,20 +1,25 @@
+/* A note card resting on the desk. */
 .callout {
   display: flex;
   gap: 12px;
   align-items: flex-start;
-  margin-top: 20px;
+  margin-top: 22px;
   padding: 14px 16px;
   font-size: 13px;
   line-height: 1.55;
   color: var(--muted);
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  text-shadow: var(--emboss);
+  background-color: color-mix(in srgb, var(--paper) 88%, #f2d675);
+  background-image: var(--paper-texture);
+  border: 1px solid var(--paper-edge);
+  border-radius: 3px;
+  box-shadow: var(--sheet);
 }
 
 .callout > .icon {
   margin-top: 2px;
   color: var(--subtle);
+  filter: drop-shadow(var(--emboss));
 }
 
 .callout p {
@@ -22,11 +27,13 @@
 }
 
 .callout code {
-  padding: 1px 5px;
+  padding: 1px 6px;
   font-size: 12px;
   color: var(--fg);
   white-space: nowrap;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 5px;
+  text-shadow: none;
+  background: var(--field);
+  border: 1px solid var(--field-edge);
+  border-radius: 4px;
+  box-shadow: var(--field-inset);
 }

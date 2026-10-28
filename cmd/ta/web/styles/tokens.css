@@ -1,70 +1,125 @@
-/* Design tokens: every component reads colours, shadows and fonts from here. */
+/* Design tokens. The look is skeuomorphic: a linen desk, a brushed tantalum
+   toolbar, a ruled paper ledger, glossy beveled buttons and recessed fields.
+   Components take colours, materials and shadows from here only. Textures are
+   same-origin SVG files: the page's CSP allows no data: URLs. */
 
 :root {
   color-scheme: light dark;
-  --page: #f6f7f9;
-  --panel: #ffffff;
-  --fg: #18181b;
-  --muted: #6b7280;
-  --subtle: #9ca3af;
-  --border: #e5e7eb;
-  --border-strong: #d1d5db;
-  --surface: #f9fafb;
-  --hover: #f3f4f6;
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
-  --accent-text: #1d4ed8;
-  --accent-fg: #ffffff;
-  --accent-soft: rgb(37 99 235 / 0.09);
-  --danger: #dc2626;
-  --danger-solid: #dc2626;
-  --danger-text: #b91c1c;
-  --danger-soft: rgb(220 38 38 / 0.08);
-  --ok: #16a34a;
-  --ok-text: #15803d;
-  --ok-soft: rgb(22 163 74 / 0.12);
-  --warn: #d97706;
-  --warn-text: #b45309;
-  --warn-soft: rgb(217 119 6 / 0.12);
-  --shadow-sm: 0 1px 2px rgb(16 24 40 / 0.05);
-  --shadow-md: 0 1px 3px rgb(16 24 40 / 0.06), 0 6px 16px -4px rgb(16 24 40 / 0.06);
-  --shadow-lg: 0 24px 48px -12px rgb(16 24 40 / 0.28);
-  --ring: 0 0 0 3px rgb(37 99 235 / 0.22);
-  --radius: 8px;
-  --radius-lg: 12px;
-  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+
+  /* ink */
+  --fg: #2b2723;
+  --muted: #6b645a;
+  --subtle: #9b9488;
+  --emboss: 0 1px 0 rgb(255 255 255 / 0.85); /* text pressed into a light surface */
+
+  /* desk: linen under everything */
+  --desk: #e6e0d2;
+  --desk-texture:
+    url("/styles/noise.svg"),
+    repeating-linear-gradient(0deg, rgb(90 70 40 / 0.035) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgb(90 70 40 / 0.035) 0 1px, transparent 1px 3px);
+
+  /* brushed metal: toolbar, table head, dialog bars */
+  --metal: linear-gradient(#f7f8fa, #d9dce1 55%, #c6cad1);
+  --metal-texture: url("/styles/brushed.svg");
+  --metal-edge: #8e949d;
+  --metal-ink: #3d424a;
+
+  /* paper: ledger, cards, dialogs */
+  --paper: #fffdf6;
+  --paper-texture: url("/styles/noise.svg");
+  --paper-edge: rgb(70 55 30 / 0.28);
+  --rule: rgb(70 110 170 / 0.16); /* ruled lines */
+  --margin: rgb(214 70 70 / 0.38); /* the ledger's red margin */
+  --highlight: rgb(255 226 120 / 0.35); /* highlighter on the hovered row */
+
+  /* bevels and depth */
+  --bevel-hi: rgb(255 255 255 / 0.8);
+  --bevel-lo: rgb(0 0 0 / 0.2);
+  --raised: inset 0 1px 0 var(--bevel-hi), 0 1px 2px rgb(0 0 0 / 0.22), 0 1px 0 rgb(0 0 0 / 0.06);
+  --pressed: inset 0 2px 4px rgb(0 0 0 / 0.28), inset 0 1px 1px rgb(0 0 0 / 0.2);
+  --sheet: 0 1px 0 rgb(255 255 255 / 0.5) inset, 0 2px 4px rgb(40 30 10 / 0.18), 0 10px 24px -6px rgb(40 30 10 / 0.3);
+  --lifted: 0 30px 60px -12px rgb(20 15 5 / 0.55), 0 0 0 1px rgb(0 0 0 / 0.25);
+
+  /* controls */
+  --button: linear-gradient(#ffffff, #eceae6 48%, #e1ded8 52%, #d6d2cb);
+  --button-hover: linear-gradient(#ffffff, #f3f1ed 48%, #e9e6e0 52%, #dedad3);
+  --button-edge: #9a948a;
+  --field: #fffefb;
+  --field-edge: #a8a196;
+  --field-inset: inset 0 1px 3px rgb(0 0 0 / 0.2), inset 0 0 0 1px rgb(0 0 0 / 0.02);
+  --groove: 0 1px 0 rgb(255 255 255 / 0.7);
+
+  /* glossy colours: light top half, sharp gloss line, saturated bottom */
+  --accent: #2f6fe4;
+  --accent-text: #1f56b8;
+  --gloss-accent: linear-gradient(#8bbaff, #4d8ef5 48%, #2c6ee6 52%, #2a64d4);
+  --gloss-accent-edge: #1d4fae;
+  --gloss-danger: linear-gradient(#ff9a8f, #ef5a4c 48%, #d93a2c 52%, #c9301f);
+  --gloss-danger-edge: #9e2418;
+  --danger-text: #b42318;
+  --ok-text: #2f7a3e;
+  --warn-text: #9a5b06;
+  --ring: 0 0 0 3px rgb(47 111 228 / 0.35);
+
+  /* lamps */
+  --led-on: radial-gradient(circle at 35% 30%, #e6ffe9 0 12%, #4ade80 40%, #16a34a 75%, #0f6b30);
+  --led-on-glow: 0 0 6px rgb(74 222 128 / 0.75), 0 0 0 1px rgb(10 60 25 / 0.45);
+  --led-red: radial-gradient(circle at 35% 30%, #ffe4e1 0 12%, #f87171 40%, #dc2626 75%, #8f1515);
+  --led-red-glow: 0 0 6px rgb(248 113 113 / 0.75), 0 0 0 1px rgb(90 10 10 / 0.45);
+
+  /* display: the run command's screen */
+  --screen: linear-gradient(#0f1f14, #0a1710);
+  --screen-ink: #7cf2a8;
+
+  --radius: 7px;
+  --radius-lg: 10px;
+  --sans: "Helvetica Neue", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+/* Dark: dark leather desk, gunmetal, charcoal paper. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --page: #0c0c0e;
-    --panel: #151518;
-    --fg: #ededf0;
-    --muted: #a1a1aa;
-    --subtle: #71717a;
-    --border: #26262b;
-    --border-strong: #3a3a41;
-    --surface: #1a1a1e;
-    --hover: #1f1f24;
-    --accent: #2563eb;
-    --accent-hover: #3b82f6;
-    --accent-text: #60a5fa;
-    --accent-fg: #ffffff;
-    --accent-soft: rgb(59 130 246 / 0.16);
-    --danger: #f87171;
-    --danger-solid: #dc2626;
-    --danger-text: #f87171;
-    --danger-soft: rgb(248 113 113 / 0.12);
-    --ok: #4ade80;
-    --ok-text: #4ade80;
-    --ok-soft: rgb(74 222 128 / 0.14);
-    --warn: #fbbf24;
-    --warn-text: #fbbf24;
-    --warn-soft: rgb(251 191 36 / 0.12);
-    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
-    --shadow-md: 0 1px 3px rgb(0 0 0 / 0.5);
-    --shadow-lg: 0 24px 48px -12px rgb(0 0 0 / 0.7);
-    --ring: 0 0 0 3px rgb(59 130 246 / 0.35);
+    --fg: #efe9df;
+    --muted: #b8ae9f;
+    --subtle: #877e72;
+    --emboss: 0 -1px 0 rgb(0 0 0 / 0.7);
+
+    --desk: #2b241f;
+    --desk-texture:
+      url("/styles/noise.svg"),
+      radial-gradient(120% 90% at 50% 0%, rgb(255 230 200 / 0.06), transparent 60%);
+
+    --metal: linear-gradient(#5c626c, #40454d 55%, #33373e);
+    --metal-edge: #15171a;
+    --metal-ink: #e6e8ec;
+
+    --paper: #34302b;
+    --paper-edge: rgb(0 0 0 / 0.6);
+    --rule: rgb(255 255 255 / 0.07);
+    --margin: rgb(240 100 100 / 0.3);
+    --highlight: rgb(255 214 110 / 0.09);
+
+    --bevel-hi: rgb(255 255 255 / 0.14);
+    --bevel-lo: rgb(0 0 0 / 0.5);
+    --raised: inset 0 1px 0 var(--bevel-hi), 0 1px 2px rgb(0 0 0 / 0.6);
+    --pressed: inset 0 2px 4px rgb(0 0 0 / 0.6), inset 0 1px 1px rgb(0 0 0 / 0.5);
+    --sheet: 0 1px 0 rgb(255 255 255 / 0.06) inset, 0 2px 4px rgb(0 0 0 / 0.5), 0 12px 28px -6px rgb(0 0 0 / 0.7);
+    --lifted: 0 30px 60px -12px rgb(0 0 0 / 0.85), 0 0 0 1px rgb(0 0 0 / 0.6);
+
+    --button: linear-gradient(#5a5650, #46423d 48%, #3b3833 52%, #34312c);
+    --button-hover: linear-gradient(#64605a, #4e4a44 48%, #43403a 52%, #3b3833);
+    --button-edge: #141210;
+    --field: #1d1a17;
+    --field-edge: #0e0d0b;
+    --field-inset: inset 0 1px 3px rgb(0 0 0 / 0.7);
+    --groove: 0 1px 0 rgb(255 255 255 / 0.06);
+
+    --accent-text: #8fb8ff;
+    --danger-text: #ff8a7f;
+    --ok-text: #7fdc95;
+    --warn-text: #f4c26b;
+    --ring: 0 0 0 3px rgb(96 150 255 / 0.45);
   }
 }

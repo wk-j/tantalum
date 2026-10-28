@@ -1,39 +1,49 @@
+/* An empty ledger page, stitched to the desk, with a metal medallion. */
 .empty {
   display: grid;
   gap: 8px;
   justify-items: center;
   padding: 56px 24px;
   text-align: center;
-  background: var(--panel);
-  border: 1px dashed var(--border-strong);
+  background-color: var(--paper);
+  background-image: var(--paper-texture);
+  border: 1px solid var(--paper-edge);
   border-radius: var(--radius-lg);
+  outline: 2px dashed var(--bevel-lo);
+  outline-offset: -9px;
+  box-shadow: var(--sheet);
 }
 
 .empty-icon {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
-  margin-bottom: 6px;
-  color: var(--accent-text);
-  background: var(--accent-soft);
-  border-radius: var(--radius-lg);
+  width: 52px;
+  height: 52px;
+  margin-bottom: 8px;
+  color: var(--metal-ink);
+  background: var(--metal-texture), var(--metal);
+  border: 1px solid var(--metal-edge);
+  border-radius: 50%;
+  box-shadow: inset 0 1px 0 var(--bevel-hi), 0 2px 4px rgb(0 0 0 / 0.3);
 }
 
 .empty-icon .icon {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
+  filter: drop-shadow(var(--emboss));
 }
 
 .empty h2 {
-  font-size: 16px;
-  font-weight: 650;
+  font-size: 18px;
+  font-weight: 700;
+  text-shadow: var(--emboss);
 }
 
 .empty p {
   max-width: 440px;
   margin: 0 0 12px;
   color: var(--muted);
+  text-shadow: var(--emboss);
 }
 
 .empty-actions {
@@ -45,9 +55,13 @@
 .no-match {
   margin: 0;
   padding: 32px;
+  font-style: italic;
   text-align: center;
   color: var(--muted);
-  background: var(--panel);
-  border: 1px dashed var(--border-strong);
+  text-shadow: var(--emboss);
+  background-color: var(--paper);
+  background-image: var(--paper-texture);
+  border: 1px solid var(--paper-edge);
   border-radius: var(--radius-lg);
+  box-shadow: var(--sheet);
 }

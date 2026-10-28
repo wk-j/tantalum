@@ -1,15 +1,15 @@
+/* Fields are recessed into the surface. */
 .input {
   width: 100%;
-  height: 34px;
-  padding: 7px 10px;
+  height: 32px;
+  padding: 6px 10px;
   font: inherit;
   font-size: 13.5px;
   color: var(--fg);
-  background: var(--panel);
-  border: 1px solid var(--border-strong);
+  background: var(--field);
+  border: 1px solid var(--field-edge);
   border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
-  transition: border-color 0.12s, box-shadow 0.12s;
+  box-shadow: var(--field-inset), var(--groove);
 }
 
 textarea.input {
@@ -29,21 +29,23 @@ textarea.input {
 }
 
 .input:focus {
-  border-color: var(--accent);
+  border-color: var(--gloss-accent-edge);
   outline: none;
-  box-shadow: var(--ring);
+  box-shadow: var(--field-inset), var(--ring);
 }
 
 .input:read-only {
   color: var(--muted);
-  background: var(--surface);
+  background: transparent;
 }
 
 .field {
   display: grid;
   gap: 6px;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-shadow: var(--emboss);
 }
 
 .field-grow {
@@ -51,8 +53,10 @@ textarea.input {
 }
 
 .field-label {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-shadow: var(--emboss);
 }
 
 .check {
@@ -61,25 +65,31 @@ textarea.input {
   align-items: center;
   font-size: 13px;
   color: var(--muted);
+  text-shadow: var(--emboss);
 }
 
 .hint {
   margin: -8px 0 0;
-  font-size: 12.5px;
+  font-size: 12px;
+  font-style: italic;
   color: var(--muted);
 }
 
+/* An engraved groove around a group. */
 .fieldset {
   display: grid;
   gap: 10px;
   margin: 0;
   padding: 10px 14px 14px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  border: 1px solid var(--bevel-lo);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--groove), inset var(--groove);
 }
 
 .fieldset legend {
   padding: 0 6px;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-shadow: var(--emboss);
 }

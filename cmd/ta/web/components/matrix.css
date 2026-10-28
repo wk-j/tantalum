@@ -1,10 +1,14 @@
+/* The matrix is a ledger page: a brushed metal header strip, ruled lines, a
+   red double margin after the names, a lamp for each stored value and an
+   empty slot for each gap. */
 .matrix-wrap {
   max-height: calc(100vh - 260px);
   overflow: auto;
-  background: var(--panel);
-  border: 1px solid var(--border);
+  background-color: var(--paper);
+  background-image: var(--paper-texture);
+  border: 1px solid var(--paper-edge);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--sheet);
 }
 
 .matrix {
@@ -18,7 +22,7 @@
   padding: 0;
   font-weight: inherit;
   text-align: left;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--rule);
 }
 
 .matrix tbody tr:last-child > * {
@@ -29,35 +33,43 @@
   position: sticky;
   top: 0;
   z-index: 2;
-  background: var(--surface);
+  background: var(--metal-texture), var(--metal);
+  border-bottom: 1px solid var(--metal-edge);
+  box-shadow: inset 0 1px 0 var(--bevel-hi);
 }
 
 .matrix tbody th,
 .matrix thead th.corner {
   position: sticky;
   left: 0;
-  border-right: 1px solid var(--border);
+  border-right: 3px double var(--margin);
 }
 
 .matrix tbody th {
   z-index: 1;
-  background: var(--panel);
+  background-color: var(--paper);
+  background-image: var(--paper-texture);
 }
 
 .matrix thead th.corner {
   z-index: 3;
-  height: 42px;
+  height: 40px;
   padding: 0 16px;
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--metal-ink);
   text-transform: uppercase;
+  text-shadow: var(--emboss);
 }
 
-.matrix tbody tr:hover > th,
+/* A highlighter stroke across the hovered row. */
 .matrix tbody tr:hover > td {
-  background: var(--hover);
+  background: var(--highlight);
+}
+
+.matrix tbody tr:hover > th {
+  background-image: linear-gradient(var(--highlight), var(--highlight)), var(--paper-texture);
 }
 
 /* Header and cell buttons fill their table cell. */
@@ -76,19 +88,25 @@
 .env-head:focus-visible,
 .name-head:focus-visible,
 .cell:focus-visible {
-  outline-offset: -2px;
+  outline-offset: -3px;
 }
 
 .env-head {
   gap: 8px;
-  height: 42px;
+  height: 40px;
   padding: 0 12px 0 16px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
+  color: var(--metal-ink);
+  text-shadow: var(--emboss);
 }
 
 .env-head:hover {
-  background: var(--hover);
+  background: rgb(255 255 255 / 0.18);
+}
+
+.env-head:active {
+  box-shadow: var(--pressed);
 }
 
 .name-head {
@@ -100,7 +118,8 @@
 
 .name-head code {
   font-size: 12.5px;
-  font-weight: 500;
+  font-weight: 600;
+  color: var(--fg);
 }
 
 /* The trailing icon hints that the header opens actions. */
@@ -124,18 +143,21 @@
   opacity: 1;
 }
 
+/* An embossed counter. */
 .count {
-  min-width: 20px;
-  padding: 0 6px;
-  font-size: 11.5px;
-  font-weight: 500;
+  min-width: 22px;
+  padding: 0 7px;
+  font-size: 11px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 18px;
   color: var(--muted);
   text-align: center;
-  background: var(--panel);
-  border: 1px solid var(--border);
+  text-shadow: var(--emboss);
+  background: var(--field);
+  border: 1px solid var(--field-edge);
   border-radius: 999px;
+  box-shadow: var(--field-inset), var(--groove);
 }
 
 .cell {
@@ -155,34 +177,41 @@
   color: var(--fg);
 }
 
+/* An indicator lamp, lit. */
 .dot {
   flex: none;
-  width: 8px;
-  height: 8px;
-  background: var(--ok);
+  width: 10px;
+  height: 10px;
+  background: var(--led-on);
   border-radius: 50%;
-  box-shadow: 0 0 0 3px var(--ok-soft);
+  box-shadow: var(--led-on-glow);
 }
 
-/* A gap must stay visible: without fallback (ADR 0004) it is a command that
-   fails in that environment. */
+/* A gap is an empty slot recessed into the page: without fallback (ADR 0004)
+   it is a command that fails in that environment, so it must stay visible. */
 .gap {
   display: inline-flex;
   gap: 4px;
   align-items: center;
   height: 24px;
-  padding: 0 8px;
-  font-size: 12px;
-  color: var(--muted);
-  border: 1px dashed color-mix(in srgb, var(--muted) 55%, transparent);
+  padding: 0 9px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--subtle);
+  text-shadow: var(--emboss);
+  background: color-mix(in srgb, var(--field) 60%, transparent);
+  border: 1px solid color-mix(in srgb, var(--field-edge) 70%, transparent);
   border-radius: 6px;
+  box-shadow: var(--field-inset), var(--groove);
 }
 
 .gap-swatch {
-  width: 18px;
+  width: 20px;
   height: 12px;
-  border: 1px dashed color-mix(in srgb, var(--muted) 55%, transparent);
-  border-radius: 4px;
+  background: var(--field);
+  border: 1px solid var(--field-edge);
+  border-radius: 3px;
+  box-shadow: var(--field-inset);
 }
 
 .gap .icon {
@@ -197,11 +226,18 @@
   display: none;
 }
 
+/* Hovered, the slot turns into a glossy Add button. */
 .cell-gap:hover .gap,
 .cell-gap:focus-visible .gap {
-  color: var(--accent-text);
-  background: var(--accent-soft);
-  border-color: transparent;
+  color: #ffffff;
+  text-shadow: 0 -1px 0 rgb(0 0 0 / 0.35);
+  background: var(--gloss-accent);
+  border-color: var(--gloss-accent-edge);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.45), 0 1px 2px rgb(0 0 0 / 0.3);
+}
+
+.cell-gap:active .gap {
+  box-shadow: var(--pressed);
 }
 
 .cell-gap:hover .gap .icon,

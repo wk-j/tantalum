@@ -18,7 +18,8 @@ body {
   min-height: 100vh;
   margin: 0;
   color: var(--fg);
-  background: var(--page);
+  background-color: var(--desk);
+  background-image: var(--desk-texture);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -47,6 +48,7 @@ input[type="checkbox"] {
   accent-color: var(--accent);
 }
 
+/* A keycap. */
 kbd {
   display: inline-grid;
   place-items: center;
@@ -54,11 +56,13 @@ kbd {
   height: 20px;
   padding: 0 5px;
   font-size: 11px;
+  font-weight: 600;
   color: var(--muted);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-bottom-width: 2px;
-  border-radius: 5px;
+  text-shadow: var(--emboss);
+  background: var(--button);
+  border: 1px solid var(--button-edge);
+  border-radius: 4px;
+  box-shadow: inset 0 1px 0 var(--bevel-hi), 0 2px 0 var(--bevel-lo);
 }
 
 :focus-visible {

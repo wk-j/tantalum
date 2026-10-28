@@ -1,76 +1,107 @@
+/* Glossy, beveled push buttons that press in when held. */
 .btn {
   display: inline-flex;
   gap: 6px;
   align-items: center;
   justify-content: center;
-  height: 34px;
-  padding: 0 12px;
-  font-size: 13.5px;
-  font-weight: 500;
+  height: 32px;
+  padding: 0 13px;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--fg);
   white-space: nowrap;
-  background: var(--panel);
-  border: 1px solid var(--border-strong);
+  text-shadow: var(--emboss);
+  background: var(--button);
+  border: 1px solid var(--button-edge);
   border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--raised);
   cursor: pointer;
-  transition: background-color 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.btn .icon {
+  filter: drop-shadow(var(--emboss));
 }
 
 .btn:not(:disabled):hover {
-  background: var(--hover);
+  background: var(--button-hover);
+}
+
+.btn:not(:disabled):active {
+  background: var(--button);
+  box-shadow: var(--pressed);
 }
 
 .btn:disabled {
   cursor: default;
   opacity: 0.5;
-  box-shadow: none;
+}
+
+.btn-primary,
+.btn-danger-solid {
+  color: #ffffff;
+  text-shadow: 0 -1px 0 rgb(0 0 0 / 0.35);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.45), 0 1px 2px rgb(0 0 0 / 0.3);
+}
+
+.btn-primary .icon,
+.btn-danger-solid .icon {
+  filter: drop-shadow(0 -1px 0 rgb(0 0 0 / 0.35));
 }
 
 .btn-primary {
-  color: var(--accent-fg);
-  background: var(--accent);
-  border-color: var(--accent);
-  box-shadow: var(--shadow-sm), inset 0 1px 0 rgb(255 255 255 / 0.12);
-}
-
-.btn-primary:not(:disabled):hover {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
-}
-
-.btn-danger {
-  color: var(--danger);
-}
-
-.btn-danger:not(:disabled):hover {
-  background: var(--danger-soft);
-  border-color: color-mix(in srgb, var(--danger) 45%, var(--border-strong));
+  background: var(--gloss-accent);
+  border-color: var(--gloss-accent-edge);
 }
 
 .btn-danger-solid {
-  color: #ffffff;
-  background: var(--danger-solid);
-  border-color: var(--danger-solid);
+  background: var(--gloss-danger);
+  border-color: var(--gloss-danger-edge);
+}
+
+.btn-primary:not(:disabled):hover,
+.btn-danger-solid:not(:disabled):hover {
+  filter: brightness(1.06);
+}
+
+.btn-primary:not(:disabled):hover {
+  background: var(--gloss-accent);
 }
 
 .btn-danger-solid:not(:disabled):hover {
-  background: color-mix(in srgb, var(--danger-solid) 88%, #000000);
-  border-color: color-mix(in srgb, var(--danger-solid) 88%, #000000);
+  background: var(--gloss-danger);
 }
 
+.btn-primary:not(:disabled):active {
+  background: var(--gloss-accent);
+  box-shadow: var(--pressed);
+}
+
+.btn-danger-solid:not(:disabled):active {
+  background: var(--gloss-danger);
+  box-shadow: var(--pressed);
+}
+
+.btn-danger {
+  color: var(--danger-text);
+}
+
+/* An icon button is a small screw-head disc until hovered. */
 .btn-icon {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   color: var(--muted);
   background: transparent;
   border-color: transparent;
+  border-radius: 50%;
   box-shadow: none;
 }
 
 .btn-icon:not(:disabled):hover {
   color: var(--fg);
+  background: var(--button-hover);
+  border-color: var(--button-edge);
+  box-shadow: var(--raised);
 }
 
 .btn-icon.copied,

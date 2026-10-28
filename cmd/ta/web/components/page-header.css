@@ -1,3 +1,4 @@
+/* The title is letterpressed into the desk. */
 .page-head {
   display: flex;
   flex-wrap: wrap;
@@ -8,9 +9,11 @@
 }
 
 .page-head h1 {
-  font-size: 22px;
-  font-weight: 650;
-  letter-spacing: -0.015em;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: color-mix(in srgb, var(--fg) 80%, transparent);
+  text-shadow: var(--emboss);
 }
 
 .summary {
@@ -20,7 +23,9 @@
   align-items: center;
   min-height: 20px;
   margin: 4px 0 0;
+  font-weight: 600;
   color: var(--muted);
+  text-shadow: var(--emboss);
 }
 
 .summary .sep {
@@ -35,10 +40,17 @@
   display: flex;
   gap: 16px;
   margin: 0;
-  padding: 0;
-  font-size: 12.5px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--muted);
+  text-shadow: var(--emboss);
   list-style: none;
+  background-color: var(--paper);
+  background-image: var(--paper-texture);
+  border: 1px solid var(--paper-edge);
+  border-radius: 999px;
+  box-shadow: var(--sheet);
 }
 
 .legend li {
