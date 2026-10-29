@@ -52,10 +52,11 @@ usage:
                           clipboard after 45 seconds; never writes it to stdout
   ta serve [-addr HOST:PORT]
                           web UI for humans to add, replace, import, copy,
-                          rename and delete secrets (loopback only; default
-                          127.0.0.1:7340, or a free port when that is taken);
-                          open the printed URL, which carries this run's
-                          access token
+                          rename and delete secrets, and to put a value on the
+                          clipboard after Touch ID as reveal -c does (loopback
+                          only; default 127.0.0.1:7340, or a free port when
+                          that is taken); open the printed URL, which carries
+                          this run's access token
 
 -e ENV picks an environment: a named set of secrets such as dev or prod
 (default "default"). An environment exists while it holds secrets.

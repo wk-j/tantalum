@@ -12,7 +12,8 @@ export function takeToken() {
 const enc = encodeURIComponent;
 
 // createClient wraps the JSON API of `ta serve`. Values only travel to the
-// server: no call returns one.
+// server: no call returns one. revealSecret has the server copy a value to
+// this Mac's clipboard once the person at the Mac approves.
 export function createClient(token) {
   async function call(method, path, body) {
     const headers = { Authorization: `Bearer ${token}` };
@@ -38,6 +39,7 @@ export function createClient(token) {
     secrets: () => call("GET", "/api/secrets"),
     putSecret: (env, name, value) => call("PUT", `/api/secrets/${enc(env)}/${enc(name)}`, { value }),
     deleteSecret: (env, name) => call("DELETE", `/api/secrets/${enc(env)}/${enc(name)}`),
+    revealSecret: (env, name) => call("POST", `/api/secrets/${enc(env)}/${enc(name)}/reveal`),
     copyEnv: (from, to, overwrite) => call("POST", `/api/envs/${enc(from)}/copy`, { to, overwrite }),
     renameEnv: (from, to) => call("POST", `/api/envs/${enc(from)}/rename`, { to }),
     deleteEnv: (env) => call("DELETE", `/api/envs/${enc(env)}`),

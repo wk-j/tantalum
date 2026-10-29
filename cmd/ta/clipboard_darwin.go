@@ -50,7 +50,7 @@ import (
 	"unsafe"
 )
 
-// pasteboardName is the pasteboard `ta reveal -c` uses; "" is the general
+// pasteboardName is the pasteboard revealSecret copies to; "" is the general
 // clipboard. Tests use another one so they leave the clipboard alone.
 var pasteboardName = ""
 

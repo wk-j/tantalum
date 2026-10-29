@@ -338,7 +338,7 @@ func TestRailsSecretValuesReachOnlyChildEnvAndRedactor(t *testing.T) {
 	p := railsLoad(t)
 	secretType := p.lookup(t, "secret").Type()
 	valueField := p.field(t, "secret", "Value")
-	readers := []string{"cmdRun", "newRedactor", "cmdReveal"}
+	readers := []string{"cmdRun", "newRedactor", "revealSecret"}
 	codecs := []string{"vault.load", "vault.save"}
 	p.inspect(func(n ast.Node, fd *ast.FuncDecl) {
 		fn := railsName(fd)
@@ -916,6 +916,7 @@ func railsRoutes(t *testing.T) []railsRequest {
 		railsRequest{"POST", "/api/envs/dev/copy", `{"to":"rails-copy"}`},
 		railsRequest{"POST", "/api/envs/rails-copy/rename", `{"to":"rails-renamed"}`},
 		railsRequest{"DELETE", "/api/envs/rails-renamed", ""},
+		railsRequest{"POST", "/api/secrets/dev/API_KEY/reveal", ""},
 		railsRequest{"POST", "/api/names/API_KEY/rename", `{"to":"RAILS_KEY"}`},
 		railsRequest{"DELETE", "/api/names/RAILS_KEY", ""},
 	)
@@ -948,8 +949,10 @@ func TestRailsServeRefusesNonLoopbackAddresses(t *testing.T) {
 	}
 }
 
-// docs/adr/0003
+// docs/adr/0003: also while the person at the Mac approves every reveal.
 func TestRailsNoResponseContainsASecretValue(t *testing.T) {
+	approved := 0
+	stubReveal(t, func(string) error { approved++; return nil })
 	v := railsVault(t, railsKey())
 	values := []string{"rails-dev-value-1", "rails-prod-value-2"}
 	if err := v.set("dev", "API_KEY", values[0]); err != nil {
@@ -971,6 +974,7 @@ func TestRailsNoResponseContainsASecretValue(t *testing.T) {
 		railsRequest{"PUT", "/api/secrets/dev/API_KEY", `{"value":"` + values[0] + `"}`},
 		railsRequest{"PUT", "/api/secrets/dev/9BAD", `{"value":"` + values[0] + `"}`},
 		railsRequest{"PUT", "/api/secrets/dev/API_KEY", `{"value":"` + values[0] + `", "bad json`},
+		railsRequest{"POST", "/api/secrets/dev/API_KEY/reveal?value=1", ""},
 		railsRequest{"DELETE", "/api/secrets/prod/API_KEY", ""},
 		railsRequest{"GET", "/api/secrets", ""},
 	)
@@ -983,6 +987,9 @@ func TestRailsNoResponseContainsASecretValue(t *testing.T) {
 				t.Errorf("%s %s: response (%d) contains a secret value", r.method, r.path, rec.Code)
 			}
 		}
+	}
+	if approved != 2 {
+		t.Fatalf("%d reveals reached the prompt, want 2 (both of dev/API_KEY); otherwise the reveal probes test nothing", approved)
 	}
 }
 
@@ -1137,11 +1144,11 @@ func TestRailsDocsInvokeTheCommandAsTa(t *testing.T) {
 	}
 }
 
-// docs/adr/0005: cmdReveal reads a value only after confirmUser approved, and
-// confirmUser is the system prompt rather than a stand-in.
+// docs/adr/0005: revealSecret reads a value only after confirmUser approved,
+// and confirmUser is the system prompt rather than a stand-in.
 func TestRailsRevealAsksBeforeReadingAValue(t *testing.T) {
 	p := railsLoad(t)
-	fd := p.funcDecl(t, "cmdReveal")
+	fd := p.funcDecl(t, "revealSecret")
 	confirm := p.lookup(t, "confirmUser")
 	valueField := p.field(t, "secret", "Value")
 
@@ -1169,12 +1176,12 @@ func TestRailsRevealAsksBeforeReadingAValue(t *testing.T) {
 		return true
 	})
 	if !gate.IsValid() {
-		t.Fatal("cmdReveal has no `if err := confirmUser(...); err != nil { return ... }`")
+		t.Fatal("revealSecret has no `if err := confirmUser(...); err != nil { return ... }`")
 	}
 	ast.Inspect(fd.Body, func(n ast.Node) bool {
 		if sel, ok := n.(*ast.SelectorExpr); ok {
 			if s := p.info.Selections[sel]; s != nil && s.Obj() == valueField && sel.Pos() < gate {
-				t.Errorf("%s: cmdReveal reads a value before confirmUser approved", p.pos(sel))
+				t.Errorf("%s: revealSecret reads a value before confirmUser approved", p.pos(sel))
 			}
 		}
 		return true
@@ -1202,11 +1209,11 @@ func TestRailsRevealAsksBeforeReadingAValue(t *testing.T) {
 	}
 }
 
-// docs/adr/0005: cmdReveal hands the value only to fmt.Fprint* on a file
+// docs/adr/0005: revealSecret hands the value only to fmt.Fprint* on a file
 // opened from /dev/tty, or to copyToClipboard; never to stdout or stderr.
 func TestRailsRevealWritesTheValueOnlyToTheTerminalOrClipboard(t *testing.T) {
 	p := railsLoad(t)
-	fd := p.funcDecl(t, "cmdReveal")
+	fd := p.funcDecl(t, "revealSecret")
 	d := p.defs(fd)
 	valueField := p.field(t, "secret", "Value")
 	copyFn := p.lookup(t, "copyToClipboard")
@@ -1222,7 +1229,7 @@ func TestRailsRevealWritesTheValueOnlyToTheTerminalOrClipboard(t *testing.T) {
 		}
 	}
 	if len(held) == 0 {
-		t.Fatal("cmdReveal never assigns a value to a variable; this test follows that variable")
+		t.Fatal("revealSecret never assigns a value to a variable; this test follows that variable")
 	}
 	openedTTY := func(e ast.Expr) bool {
 		opened := false
@@ -1257,7 +1264,7 @@ func TestRailsRevealWritesTheValueOnlyToTheTerminalOrClipboard(t *testing.T) {
 				}
 			}
 		}
-		t.Errorf("%s: cmdReveal hands the value to %s; only a file opened from /dev/tty or copyToClipboard may get it",
+		t.Errorf("%s: revealSecret hands the value to %s; only a file opened from /dev/tty or copyToClipboard may get it",
 			p.pos(id), p.describe(stack[len(stack)-1]))
 		return true
 	})

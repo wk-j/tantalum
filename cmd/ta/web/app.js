@@ -79,8 +79,10 @@ document.body.append(
     noMatch,
     Callout(
       { icon: "lock" },
-      "Values are write-only: this page adds, replaces, copies, renames and deletes secrets, but never shows a value. " +
-        "Click a cell to replace or delete that value, a name to rename it, an environment to copy, rename or delete it. " +
+      "This page adds, replaces, copies, renames and deletes secrets, but never shows a value; " +
+        "Copy value puts one on the clipboard after Touch ID or your password. " +
+        "Click a cell to replace that value, copy it to the clipboard or delete it, a name to rename it, " +
+        "an environment to copy, rename or delete it. " +
         "Agents use a secret with ",
       h("code", { textContent: "ta run -e ENV -s NAME -- …" }),
       ".",

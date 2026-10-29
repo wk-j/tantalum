@@ -75,7 +75,7 @@ func cmdServe(args []string) error {
 
 	// The token travels in the URL fragment, which browsers never send to the
 	// server or store in Referer headers; the page moves it into sessionStorage.
-	fmt.Fprintf(os.Stderr, "ta: vault %s\nta: web UI on http://%s/#token=%s\nta: anyone holding this URL can change secrets (never read them); press Ctrl-C to stop\n",
+	fmt.Fprintf(os.Stderr, "ta: vault %s\nta: web UI on http://%s/#token=%s\nta: anyone holding this URL can change secrets; copying a value to the clipboard also needs your approval at this Mac; press Ctrl-C to stop\n",
 		v.vaultLocation, ln.Addr(), token)
 	if err := srv.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
 		return err
@@ -97,7 +97,8 @@ func listenServe(addr string, fallback bool) (net.Listener, error) {
 // server is the web UI backend. Its API is write-only for values: it lists
 // environments, names and update times, stores, copies, renames and deletes
 // secrets (copies and renames move values inside the vault only), and never
-// returns a value.
+// returns a value. Its reveal puts a value on this Mac's clipboard, once the
+// person at the Mac approves.
 type server struct {
 	vault *vault
 	token []byte
@@ -119,6 +120,7 @@ func newServer(v *vault, token string, hosts []string) http.Handler {
 	mux.HandleFunc("GET /api/secrets", s.list)
 	mux.HandleFunc("PUT /api/secrets/{env}/{name}", s.put)
 	mux.HandleFunc("DELETE /api/secrets/{env}/{name}", s.delete)
+	mux.HandleFunc("POST /api/secrets/{env}/{name}/reveal", s.reveal)
 	mux.HandleFunc("POST /api/envs/{env}/copy", s.copyEnv)
 	mux.HandleFunc("POST /api/envs/{env}/rename", s.renameEnv)
 	mux.HandleFunc("DELETE /api/envs/{env}", s.deleteEnv)
@@ -224,6 +226,19 @@ func (s *server) delete(w http.ResponseWriter, r *http.Request) {
 	writeResult(w, s.vault.remove(r.PathValue("env"), r.PathValue("name")))
 }
 
+// reveal copies one value to this Mac's clipboard through revealSecret, which
+// asks the person at the Mac first; the response carries no value. A process
+// holding the token gains nothing by calling it: it could raise the same
+// prompt by running `ta reveal -c`.
+func (s *server) reveal(w http.ResponseWriter, r *http.Request) {
+	if err := revealSecret(s.vault, r.PathValue("env"), r.PathValue("name"), true); err != nil {
+		writeResult(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]int{"clearSeconds": int(clipboardClearAfter / time.Second)})
+}
+
 // target is the body of copy and rename requests.
 type target struct {
 	To        string `json:"to"`
@@ -289,7 +304,7 @@ func (s *server) deleteName(w http.ResponseWriter, r *http.Request) {
 	writeResult(w, s.vault.removeSecretEverywhere(r.PathValue("name")))
 }
 
-// writeResult answers a change: 204, or the status that fits the vault error.
+// writeResult answers a change: 204, or the status that fits the error.
 func writeResult(w http.ResponseWriter, err error) {
 	switch {
 	case err == nil:
@@ -298,6 +313,8 @@ func writeResult(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, errExists):
 		writeError(w, http.StatusConflict, err.Error())
+	case errors.Is(err, errNotRevealed):
+		writeError(w, http.StatusForbidden, err.Error())
 	default:
 		writeError(w, http.StatusInternalServerError, err.Error())
 	}

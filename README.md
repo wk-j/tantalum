@@ -62,7 +62,8 @@ Agents without skill support: paste its Rules section into `AGENTS.md` / `CLAUDE
 - **Environments**: `-e ENV` on `set`, `rm`, `run` and `reveal`; one name can hold a different value per
   environment. An environment exists while it holds a secret.
 - **Web UI**: a grid of names × environments to add, replace, import `.env` files, copy, rename and
-  delete. Values are write-only: no endpoint returns one.
+  delete. No endpoint returns a value; a cell's **Copy value** puts it on the clipboard after the same
+  prompt as `ta reveal -c`.
 - Writes lock the vault and replace it atomically, so parallel agents, terminals and the web UI are safe.
 
 ## Threat model
@@ -82,12 +83,12 @@ printing it, write it to a file, send it over the network, or read the key with
   prompts and full-screen programs work as when run directly; Ctrl-Z suspends it together with `ta`.
   Otherwise (agents, pipelines, stdin redirected) it gets pipes: no colours or progress bars, possible
   output buffering.
-- `reveal` waits for a system prompt an agent cannot answer; approving one you did not start hands the
-  value to whoever did. It writes to `/dev/tty`, never stdout. A clipboard copy is marked concealed and
-  cleared after 45 seconds unless something else was copied.
+- `reveal` and the web UI's **Copy value** wait for a system prompt an agent cannot answer; approving one
+  you did not start hands the value to whoever did. `reveal` writes to `/dev/tty`, never stdout. A
+  clipboard copy is marked concealed and cleared after 45 seconds unless something else was copied.
 - The web UI listens on loopback with a new 256-bit token per run, carried in the URL fragment. It
   rejects foreign `Host`/`Origin` headers and serves a strict CSP. A process holding the token can
-  change secrets but not read them.
+  change secrets; to read one it can only request **Copy value**, which waits for the same prompt.
 
 Exit status: `ta`'s own errors exit `125`; `run` exits with the command's status (`126` not executable,
 `127` not found, `128+N` killed by signal N) and forwards SIGINT, SIGTERM, SIGHUP and SIGQUIT.

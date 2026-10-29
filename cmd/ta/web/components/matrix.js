@@ -86,8 +86,8 @@ export class SecretMatrix {
       {
         type: "button",
         class: "cell cell-set",
-        title: `Updated ${new Date(secret.updated).toLocaleString()}: click to replace or delete`,
-        "aria-label": `${env}/${name}, updated ${ago(secret.updated)}: replace or delete`,
+        title: `Updated ${new Date(secret.updated).toLocaleString()}: click to replace, copy to the clipboard or delete`,
+        "aria-label": `${env}/${name}, updated ${ago(secret.updated)}: replace, copy to the clipboard or delete`,
         onclick: () => onSet(env, name),
       },
       h("span", { class: "dot", "aria-hidden": "true" }),

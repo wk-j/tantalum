@@ -6,8 +6,8 @@ import { confirmAction } from "../components/confirm.js";
 import { CancelButton, Dialog, Spacer } from "../components/dialog.js";
 import { EnvInput, Field, Fieldset, Hint, NameInput, TextArea } from "../components/fields.js";
 
-// createSecretDialog adds a secret to one or more environments, or replaces
-// or deletes one stored value.
+// createSecretDialog adds a secret to one or more environments, or replaces,
+// copies to the clipboard or deletes one stored value.
 export function createSecretDialog({ store, client, status, attempt }) {
   let editing = null; // {env, name} while replacing one value; null while adding
 
@@ -18,7 +18,9 @@ export function createSecretDialog({ store, client, status, attempt }) {
   const envs = Fieldset("Environments", chips.el, newEnv);
   const value = TextArea({ required: true, rows: 4, placeholder: "Paste the secret value" });
   const remove = Button({ label: "Delete", icon: "trash", variant: "danger", onclick: removeSecret });
+  const reveal = Button({ label: "Copy value", icon: "copy", onclick: revealValue });
   const submit = Button({ label: "Save", type: "submit", variant: "primary" });
+  const hint = Hint("");
 
   const dialog = new Dialog({
     title: "Add secret",
@@ -27,9 +29,9 @@ export function createSecretDialog({ store, client, status, attempt }) {
       command.el,
       envs,
       Field("Value", value),
-      Hint("One trailing newline from a paste is dropped. The value is never shown again."),
+      hint,
     ],
-    actions: [remove, Spacer(), CancelButton(), submit],
+    actions: [remove, Spacer(), reveal, CancelButton(), submit],
     onSubmit: save,
   });
 
@@ -39,7 +41,8 @@ export function createSecretDialog({ store, client, status, attempt }) {
     dialog.setTitle("Add secret");
     name.readOnly = false;
     envs.hidden = false;
-    remove.hidden = command.el.hidden = true;
+    remove.hidden = reveal.hidden = command.el.hidden = true;
+    hint.textContent = "One trailing newline from a paste is dropped. The page never shows a value.";
     setLabel(submit, "Save");
     chips.set(store.envs, env ?? (store.envs.length === 1 ? store.envs[0] : undefined));
     dialog.open(presetName ? value : name);
@@ -52,7 +55,10 @@ export function createSecretDialog({ store, client, status, attempt }) {
     dialog.setTitle(`Replace ${env} / ${secretName}`);
     name.readOnly = true;
     envs.hidden = true;
-    remove.hidden = command.el.hidden = false;
+    remove.hidden = reveal.hidden = command.el.hidden = false;
+    hint.textContent =
+      "One trailing newline from a paste is dropped. The page never shows a value: " +
+      "Copy value asks for Touch ID or your password, then puts it on the clipboard.";
     command.set(`${runCommand(env, secretName)}…`);
     setLabel(remove, `Delete from ${env}`);
     setLabel(submit, "Replace");
@@ -111,6 +117,25 @@ export function createSecretDialog({ store, client, status, attempt }) {
       dialog.close();
       status.show(`Deleted ${env}/${secretName}.`);
       return store.load();
+    });
+  }
+
+  // revealValue has the server copy the value to the clipboard. The request
+  // waits while the Mac asks the person to approve, so the button stays
+  // disabled, and a dialog reopened for another value meanwhile stays open.
+  function revealValue() {
+    attempt(async () => {
+      const target = editing;
+      reveal.disabled = true;
+      try {
+        const { clearSeconds } = await client.revealSecret(target.env, target.name);
+        if (editing === target) dialog.close();
+        status.show(
+          `Copied ${target.env}/${target.name} to the clipboard; it is cleared in ${clearSeconds} seconds unless you copy something else first.`,
+        );
+      } finally {
+        reveal.disabled = false;
+      }
     });
   }
 

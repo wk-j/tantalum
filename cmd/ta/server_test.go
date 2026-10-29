@@ -3,9 +3,12 @@ package main
 import (
 	"crypto/rand"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -183,6 +186,73 @@ func TestServerCopiesRenamesAndDeletesEnvironmentsAndNames(t *testing.T) {
 	call("DELETE", "/api/envs/staging", "", http.StatusNoContent)
 	call("DELETE", "/api/envs/staging", "", http.StatusNotFound)
 	expect("deleting staging", "dev/B")
+}
+
+// stubReveal answers the Mac's prompt with answer and copies to a private
+// pasteboard; instead of starting a clearer process it records the change
+// count each copy hands to the clearer.
+func stubReveal(t *testing.T, answer func(reason string) error) *[]int {
+	t.Helper()
+	confirm, clearer, board := confirmUser, clearClipboardLater, pasteboardName
+	t.Cleanup(func() { confirmUser, clearClipboardLater, pasteboardName = confirm, clearer, board })
+	confirmUser = answer
+	pasteboardName = fmt.Sprintf("dev.tantalum.test.%d", os.Getpid())
+	counts := &[]int{}
+	clearClipboardLater = func(count int) error {
+		*counts = append(*counts, count)
+		return nil
+	}
+	return counts
+}
+
+// The web UI's reveal asks the Mac with a prompt that names the secret and the
+// clipboard, and copies the value only once the person approves.
+func TestServerRevealCopiesOnlyAfterTheMacApproves(t *testing.T) {
+	var reasons []string
+	refuse := true
+	clears := stubReveal(t, func(reason string) error {
+		reasons = append(reasons, reason)
+		if refuse {
+			return errors.New("Canceled by user.")
+		}
+		return nil
+	})
+	h := newTestServer(t)
+	auth := map[string]string{"Authorization": "Bearer " + testToken}
+	if rec := serve(h, "PUT", "/api/secrets/dev/API_KEY", `{"value":"sk-reveal-value"}`, testHost, auth); rec.Code != http.StatusNoContent {
+		t.Fatalf("put: %d %s", rec.Code, rec.Body)
+	}
+	reveal := func(path string, want int) string {
+		t.Helper()
+		rec := serve(h, "POST", path, "", testHost, auth)
+		if rec.Code != want {
+			t.Fatalf("POST %s: status %d, want %d (%s)", path, rec.Code, want, rec.Body)
+		}
+		return strings.TrimSpace(rec.Body.String())
+	}
+
+	reveal("/api/secrets/prod/API_KEY/reveal", http.StatusNotFound)
+	if len(reasons) != 0 {
+		t.Fatalf("a missing secret raised the prompt %q", reasons)
+	}
+
+	reveal("/api/secrets/dev/API_KEY/reveal", http.StatusForbidden)
+	if len(*clears) != 0 {
+		t.Fatal("a refused prompt still copied the value")
+	}
+
+	refuse = false
+	if got := reveal("/api/secrets/dev/API_KEY/reveal", http.StatusOK); got != `{"clearSeconds":45}` {
+		t.Fatalf("approved reveal answered %s", got)
+	}
+	if len(*clears) != 1 || !clearClipboardIfUnchanged((*clears)[0]) {
+		t.Fatalf("approved reveal handed %v to the clearer; want the change count of its copy, the latest on the pasteboard", *clears)
+	}
+	for _, reason := range reasons {
+		if !strings.Contains(reason, "dev/API_KEY") || !strings.Contains(reason, "clipboard") {
+			t.Errorf("prompt %q does not name the secret and the clipboard", reason)
+		}
+	}
 }
 
 // A second ta serve, for another project, must not fail on the default port,
