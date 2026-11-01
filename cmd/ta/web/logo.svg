@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <!-- The logo: a safe's combination dial set in a brushed tantalum plate.
+       Self-contained, no <style>: the page's CSP allows only same-origin files. -->
+  <defs>
+    <linearGradient id="plate" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#a3adbb"/>
+      <stop offset="0.5" stop-color="#717c8a"/>
+      <stop offset="1" stop-color="#4a535f"/>
+    </linearGradient>
+    <linearGradient id="bevel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.55"/>
+      <stop offset="0.4" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="well" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#22262c"/>
+      <stop offset="1" stop-color="#6a7380"/>
+    </linearGradient>
+    <linearGradient id="face" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fdfdfe"/>
+      <stop offset="0.48" stop-color="#d3d8df"/>
+      <stop offset="0.52" stop-color="#c3c9d1"/>
+      <stop offset="1" stop-color="#8e97a3"/>
+    </linearGradient>
+    <radialGradient id="knob" cx="0.38" cy="0.3" r="0.85">
+      <stop offset="0" stop-color="#9ba5b3"/>
+      <stop offset="0.6" stop-color="#555e6a"/>
+      <stop offset="1" stop-color="#2c3139"/>
+    </radialGradient>
+    <filter id="brush" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.02 1.2" numOctaves="2" seed="7"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
+    <clipPath id="tile">
+      <rect x="1" y="1" width="30" height="30" rx="7"/>
+    </clipPath>
+  </defs>
+
+  <!-- plate -->
+  <rect x="1" y="1" width="30" height="30" rx="7" fill="url(#plate)"/>
+  <rect x="1" y="1" width="30" height="30" filter="url(#brush)" opacity="0.18" clip-path="url(#tile)"/>
+  <rect x="1.5" y="1.5" width="29" height="29" rx="6.5" fill="none" stroke="url(#bevel)"/>
+  <rect x="0.5" y="0.5" width="31" height="31" rx="7.5" fill="none" stroke="#2b313a"/>
+
+  <!-- dial: recessed well, chrome face, ticks, knob -->
+  <circle cx="16" cy="16.6" r="11.4" fill="url(#well)"/>
+  <circle cx="16" cy="16.6" r="10.1" fill="url(#face)" stroke="#262b33" stroke-width="0.6"/>
+  <circle cx="16" cy="16.6" r="8.6" fill="none" stroke="#3a414b" stroke-width="1.4"
+          stroke-dasharray="0.42 2.282" stroke-dashoffset="0.21"/>
+  <circle cx="16" cy="16.6" r="8.4" fill="none" stroke="#2a3038" stroke-width="2.4"
+          stroke-dasharray="0.6 12.594" stroke-dashoffset="0.3"/>
+  <circle cx="16" cy="16.6" r="5.3" fill="url(#knob)" stroke="#1d2128" stroke-width="0.6"/>
+  <path d="M12.6 15.2 A3.9 3.9 0 0 1 17.6 12.9" fill="none" stroke="#fff" stroke-opacity="0.5" stroke-width="0.8" stroke-linecap="round"/>
+
+  <!-- index mark -->
+  <path d="M14.5 2.6 H17.5 L16 4.9 Z" fill="#e2483b" stroke="#7d1c14" stroke-width="0.4" stroke-linejoin="round"/>
+</svg>

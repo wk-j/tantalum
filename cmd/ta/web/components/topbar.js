@@ -1,8 +1,8 @@
 import { h, icon } from "../lib/dom.js";
 
-// Logo is tantalum's element symbol, Ta, on a metal tile; it names the app
-// for screen readers and on hover.
-const Logo = () => h("span", { class: "logo", role: "img", "aria-label": "tantalum", title: "tantalum", textContent: "Ta" });
+// Logo is a safe's combination dial set in a brushed tantalum plate
+// (/logo.svg); it names the app for screen readers and on hover.
+const Logo = () => h("img", { class: "logo", src: "/logo.svg", alt: "tantalum", title: "tantalum", width: 30, height: 30 });
 
 // Topbar shows the brand, which vault the page manages, and the page tools
 // (search, buttons) on the right.

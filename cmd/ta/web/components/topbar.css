@@ -27,22 +27,12 @@
   min-width: 0;
 }
 
-/* Tantalum's element symbol on a plain metal tile. */
+/* The logo draws its own plate (logo.svg); the shadow lifts it off the bar. */
 .logo {
-  display: grid;
   flex: none;
-  place-items: center;
   width: 30px;
   height: 30px;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  color: #f7f9fc;
-  text-shadow: 0 -1px 0 rgb(0 0 0 / 0.4);
-  background: linear-gradient(#828c9a, #4f5866);
-  border: 1px solid #2b313a;
-  border-radius: 7px;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3), 0 1px 1px rgb(0 0 0 / 0.25);
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.25));
 }
 
 /* An engraved groove between brand and vault. */
