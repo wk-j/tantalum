@@ -20,15 +20,39 @@ ta init                            # once per vault: creates it and its Keychain
 ta set GITHUB_TOKEN                # hidden prompt; the value is never an argument
 ta set -e prod DB_URL              # environment prod (default: "default")
 some-cli create-token | ta set X   # or pipe it in; one trailing newline is dropped
+ta import .env                     # import into default; keep existing secrets
+ta import -e prod .env.production  # import into one environment
+ta import -e dev -overwrite .env   # explicitly replace existing secrets
+ta import -e dev - < .env          # read the same format from stdin
 ta list                            # ENV, NAME, last update; never values
 ta rm -e prod DB_URL
 ta reveal [-e ENV] [-c] NAME       # after Touch ID/password: print to the terminal, or -c to clipboard
 ta serve                           # web UI on 127.0.0.1:7340, or a free port if taken; open the printed URL
 ```
 
-Flags go before `NAME`; names are shell variable names (`[A-Za-z_][A-Za-z0-9_]*`). Run `reveal` and
+Flags go before `NAME` or `FILE`; names are shell variable names (`[A-Za-z_][A-Za-z0-9_]*`). Run `reveal` and
 `serve` in your own terminal, not through an agent: the revealed value appears on that terminal, and the
 URL `serve` prints is the key to the UI.
+
+### Import a .env file
+
+`ta import [-e ENV] [-overwrite] FILE` reads a UTF-8 file directly into the vault selected by your
+working directory; use `-` as `FILE` to read piped or redirected stdin (interactive terminal input is
+refused so pasted secrets cannot be echoed). It prints only imported/kept counts, never values.
+Existing secrets and their update times are kept unless `-overwrite` is given. The source file is not
+changed or deleted, so remove or otherwise protect your plaintext copy yourself after checking the import.
+
+The format supports `NAME=VALUE`, optional `export`, blank lines and `#` comments. Unquoted values are
+trimmed; a `#` at the start of the value or after a space/tab begins a comment. Single-quoted values are
+literal. Double-quoted values decode `\n`, `\r`, `\t`, `\"` and `\\`; other backslash sequences stay
+literal. Both quote styles can span lines and preserve quoted whitespace. Shell commands and variable
+references such as `$HOME`, `${TOKEN}` and `$(command)` are **not** executed or expanded. Later duplicate
+names win within the input file.
+
+The complete input is validated before a single locked, encrypted vault write: a malformed entry,
+unclosed quote, text after a closing quote (other than a comment), empty value, NUL byte, invalid UTF-8,
+or file with no secrets fails without importing anything. Parse errors show line numbers/reasons, not
+source text or values.
 
 ## Agent: use secrets
 
@@ -59,7 +83,7 @@ Agents without skill support: paste its Rules section into `AGENTS.md` / `CLAUDE
   `~/.tantalum/projects/NAME-HASH`, keyed by the repository directory; subdirectories and worktrees
   share it, while another clone or a moved repository starts a new, empty one. Elsewhere `ta` uses the
   default vault. `TANTALUM_HOME` moves `~/.tantalum`.
-- **Environments**: `-e ENV` on `set`, `rm`, `run` and `reveal`; one name can hold a different value per
+- **Environments**: `-e ENV` on `set`, `import`, `rm`, `run` and `reveal`; one name can hold a different value per
   environment. An environment exists while it holds a secret.
 - **Web UI**: a grid of names × environments to add, replace, import `.env` files, copy, rename and
   delete. No endpoint returns a value; a cell's **Copy value** puts it on the clipboard after the same

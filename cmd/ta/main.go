@@ -38,6 +38,10 @@ usage:
   ta init                 create the vault for this directory and store its key in
                           the login Keychain
   ta set [-e ENV] NAME    store a secret (hidden prompt, or stdin when piped)
+  ta import [-e ENV] [-overwrite] FILE
+                          import .env secrets from FILE, or - for stdin; keeps
+                          existing secrets unless -overwrite is given;
+                          invalid or empty entries fail without storing any
   ta list                 list environments and secret names, never values
   ta rm [-e ENV] NAME     delete a secret
   ta run [-e ENV] -s SPEC... -- COMMAND [ARGS...]
@@ -84,6 +88,8 @@ func main() {
 		err = cmdInit(args)
 	case "set":
 		err = cmdSet(args)
+	case "import":
+		err = cmdImport(args)
 	case "list":
 		err = cmdList(args)
 	case "rm":

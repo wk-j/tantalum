@@ -522,16 +522,36 @@ func TestRailsRunUsesOnlyTheChosenEnvironment(t *testing.T) {
 }
 
 // docs/adr/0001: `ta set` stores only what readSecretValue read (hidden prompt
-// or stdin), the web UI only the decoded request body; nothing else stores values.
+// or stdin), import only a file/stdin reader's bytes, and the web UI only the
+// decoded request body. Keep this test's name in sync with its Krypton check.
 func TestRailsValuesEnterTheVaultOnlyFromPromptStdinOrRequestBody(t *testing.T) {
 	p := railsLoad(t)
 	readSecretValue := p.lookup(t, "readSecretValue")
+	readDotenvFile := p.lookup(t, "readDotenvFile")
+	imports := 0
 	p.inspect(func(n ast.Node, fd *ast.FuncDecl) {
 		call, ok := n.(*ast.CallExpr)
-		if !ok || !railsIs(p.callee(call), "main", "vault", "set") {
+		if !ok {
 			return
 		}
 		fn := railsName(fd)
+		if railsIs(p.callee(call), "main", "vault", "importDotenv") {
+			imports++
+			if fn != "cmdImport" || len(call.Args) != 3 {
+				t.Errorf("%s: only cmdImport may import file/stdin bytes", p.pos(call))
+				return
+			}
+			for _, src := range p.sources(p.defs(fd), call.Args[1], map[types.Object]bool{}) {
+				c, ok := src.(*ast.CallExpr)
+				if !ok || p.callee(c) != readDotenvFile {
+					t.Errorf("%s: import bytes must come from readDotenvFile, never arguments or flags", p.pos(call))
+				}
+			}
+			return
+		}
+		if !railsIs(p.callee(call), "main", "vault", "set") {
+			return
+		}
 		if len(call.Args) != 3 {
 			t.Errorf("%s: vault.set called with %d arguments; this test expects (env, name, value)", p.pos(call), len(call.Args))
 			return
@@ -553,6 +573,37 @@ func TestRailsValuesEnterTheVaultOnlyFromPromptStdinOrRequestBody(t *testing.T) 
 		default:
 			t.Errorf("%s: %s stores a secret value; only cmdSet and server.put may", p.pos(call), fn)
 		}
+	})
+	if imports != 1 {
+		t.Errorf("found %d import calls, want one guarded cmdImport call", imports)
+	}
+	reader := p.funcDecl(t, "readDotenvFile")
+	path := p.info.Defs[reader.Type.Params.List[0].Names[0]]
+	ast.Inspect(reader.Body, func(n ast.Node) bool {
+		ret, ok := n.(*ast.ReturnStmt)
+		if !ok {
+			return true
+		}
+		if len(ret.Results) == 1 {
+			if call, ok := ret.Results[0].(*ast.CallExpr); ok && len(call.Args) == 1 {
+				arg := call.Args[0]
+				if railsIs(p.callee(call), "os", "", "ReadFile") {
+					if id, ok := arg.(*ast.Ident); ok && p.info.Uses[id] == path {
+						return true
+					}
+				}
+				if railsIs(p.callee(call), "io", "", "ReadAll") {
+					if sel, ok := arg.(*ast.SelectorExpr); ok {
+						obj := p.info.Uses[sel.Sel]
+						if obj != nil && obj.Pkg() != nil && obj.Pkg().Path() == "os" && obj.Name() == "Stdin" {
+							return true
+						}
+					}
+				}
+			}
+		}
+		t.Errorf("%s: import reader must return os.ReadFile(path) or io.ReadAll(os.Stdin)", p.pos(ret))
+		return true
 	})
 }
 
@@ -820,6 +871,9 @@ func TestRailsUnknownVaultVersionIsNeverOverwritten(t *testing.T) {
 		}
 		if err := v.remove("dev", "X"); err == nil {
 			t.Error("remove succeeded")
+		}
+		if _, _, err := v.importDotenv("dev", []byte("X=new-value"), true); err == nil {
+			t.Error("import succeeded")
 		}
 		if after, _ := os.ReadFile(filepath.Join(dir, vaultFile)); !bytes.Equal(before, after) {
 			t.Error("the vault file was rewritten")
@@ -1094,7 +1148,7 @@ func TestRailsOwnErrorsArePrefixedTa(t *testing.T) {
 		main()
 		return
 	}
-	for _, args := range []string{"no-such-command", "set", "list", "run -s X", "serve -addr 0.0.0.0:0"} {
+	for _, args := range []string{"no-such-command", "set", "import", "import input.env", "list", "run -s X", "serve -addr 0.0.0.0:0"} {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestRailsOwnErrorsArePrefixedTa$")
 		cmd.Env = append(os.Environ(), "TA_RAILS_MAIN_ARGS="+args, "TANTALUM_HOME="+t.TempDir())
 		cmd.Dir = t.TempDir()
@@ -1114,7 +1168,7 @@ func TestRailsOwnErrorsArePrefixedTa(t *testing.T) {
 
 // docs/adr/0002
 func TestRailsDocsInvokeTheCommandAsTa(t *testing.T) {
-	oldName := regexp.MustCompile(`\btantalum\s+(init|set|list|rm|run|reveal|serve|help)\b`)
+	oldName := regexp.MustCompile(`\btantalum\s+(init|set|import|list|rm|run|reveal|serve|help)\b`)
 	bp, err := build.ImportDir(".", 0)
 	if err != nil {
 		t.Fatal(err)

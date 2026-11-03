@@ -187,6 +187,32 @@ func (v *vault) set(env, name, value string) error {
 	})
 }
 
+// importDotenv validates the entire input before changing the vault, then merges
+// it in one locked write. Existence checks happen under the lock, so keeping an
+// existing value is safe even when another terminal is writing concurrently.
+func (v *vault) importDotenv(env string, data []byte, overwrite bool) (imported, skipped int, err error) {
+	entries, err := parseDotenv(data)
+	if err != nil {
+		return 0, 0, err
+	}
+	err = v.update(func(envs environments) error {
+		if envs[env] == nil {
+			envs[env] = map[string]secret{}
+		}
+		now := time.Now().UTC()
+		for name, value := range entries {
+			if _, exists := envs[env][name]; exists && !overwrite {
+				skipped++
+				continue
+			}
+			envs[env][name] = secret{Value: value, Updated: now}
+			imported++
+		}
+		return nil
+	})
+	return imported, skipped, err
+}
+
 func (v *vault) remove(env, name string) error {
 	return v.update(func(envs environments) error {
 		if _, ok := envs[env][name]; !ok {
