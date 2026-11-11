@@ -74,6 +74,18 @@ configuration:
 
 exit status: ta's own errors exit 125; run exits with COMMAND's status
 (126 not executable, 127 not found, 128+N killed by signal N).
+
+for AI agents:
+  Use a secret by name; its value stays in the command ta runs. Your own shell
+  does not have the variables, so put $VAR inside a single-quoted sh -c:
+    ta run -e dev -s DB_URL -- sh -c 'psql "$DB_URL" -c "select 1"'
+  Output shows every vault value as [REDACTED:ENV/NAME], for example
+  [REDACTED:dev/DB_URL]; that is expected, do not try to recover the value.
+  Never run ta reveal or ta serve, or ask for the serve URL: they are for the
+  human, and the URL is a credential.
+  If ta reports no vault, no environment, or a name missing from an environment,
+  stop and ask the human to run ta init or ta set -e ENV NAME in their own
+  terminal, or to add it in the ta serve web UI; never take the value in chat.
 `
 
 func main() {

@@ -48,6 +48,8 @@ environments such as `dev` and `prod`. You can use a secret by **name**; you mus
 
 ## Notes
 
+- `ta help` prints every command and flag, ending with a short `for AI agents` summary of these
+  rules. Run it when unsure of the syntax instead of guessing.
 - Exit status `125` is an error from `ta` itself (message on stderr); any other status is the
   command's own.
 - Unless your shell runs in a terminal, `ta run` gives the command pipes, not a TTY: no colours or
