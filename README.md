@@ -24,15 +24,17 @@ ta import .env                     # import into default; keep existing secrets
 ta import -e prod .env.production  # import into one environment
 ta import -e dev -overwrite .env   # explicitly replace existing secrets
 ta import -e dev - < .env          # read the same format from stdin
+ta export secrets.ta-export        # after Touch ID/password: every secret, encrypted with a passphrase you type
+ta import secrets.ta-export        # on another Mac or vault: asks for that passphrase
 ta list                            # ENV, NAME, last update; never values
 ta rm -e prod DB_URL
 ta reveal [-e ENV] [-c] NAME       # after Touch ID/password: print to the terminal, or -c to clipboard
 ta serve                           # web UI on 127.0.0.1:7340, or a free port if taken; open the printed URL
 ```
 
-Flags go before `NAME` or `FILE`; names are shell variable names (`[A-Za-z_][A-Za-z0-9_]*`). Run `reveal` and
-`serve` in your own terminal, not through an agent: the revealed value appears on that terminal, and the
-URL `serve` prints is the key to the UI.
+Flags go before `NAME` or `FILE`; names are shell variable names (`[A-Za-z_][A-Za-z0-9_]*`). Run `reveal`, `export` and
+`serve` in your own terminal, not through an agent: the revealed value appears on that terminal, the export
+passphrase is typed there, and the URL `serve` prints is the key to the UI.
 
 ### Import a .env file
 
@@ -53,6 +55,21 @@ The complete input is validated before a single locked, encrypted vault write: a
 unclosed quote, text after a closing quote (other than a comment), empty value, NUL byte, invalid UTF-8,
 or file with no secrets fails without importing anything. Parse errors show line numbers/reasons, not
 source text or values.
+
+### Move a vault: export and import
+
+`ta export FILE` writes every environment of the vault selected by your working directory to a new file,
+encrypted with a passphrase you choose. It first waits for the same Touch ID/password prompt as `ta reveal`,
+then asks for the passphrase twice on the terminal (at least 12 characters). It never overwrites a file and
+never writes to stdout; the file is created with mode 0600 and does not contain the vault's Keychain key.
+
+`ta import [-overwrite] FILE` recognises an export file and asks for its passphrase on the terminal, so it
+works in any vault on any Mac. It restores the environments the file holds (`-e` is refused for export
+files) and keeps the secrets' update times. As with `.env` files, existing secrets are kept unless
+`-overwrite` is given, and a wrong passphrase, damaged file or invalid entry imports nothing.
+
+The file is only as strong as its passphrase: anyone holding a copy can try passphrases offline. Use a long
+one, keep it apart from the file, and delete the file once it has served its purpose.
 
 ## Agent: use secrets
 
@@ -107,6 +124,9 @@ printing it, write it to a file, send it over the network, or read the key with
   prompts and full-screen programs work as when run directly; Ctrl-Z suspends it together with `ta`.
   Otherwise (agents, pipelines, stdin redirected) it gets pipes: no colours or progress bars, possible
   output buffering.
+- `export` waits for the same prompt and reads its passphrase from `/dev/tty`, so an agent without a terminal
+  cannot start one. An export file is AES-256-GCM under a PBKDF2-HMAC-SHA256 key (600,000 iterations) of
+  the passphrase; a weak passphrase can be guessed offline.
 - `reveal` and the web UI's **Copy value** wait for a system prompt an agent cannot answer; approving one
   you did not start hands the value to whoever did. `reveal` writes to `/dev/tty`, never stdout. A
   clipboard copy is marked concealed and cleared after 45 seconds unless something else was copied.

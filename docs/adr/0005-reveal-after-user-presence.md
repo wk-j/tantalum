@@ -10,7 +10,8 @@ prompt approves: Touch ID, or an Apple Watch or the login password on a Mac with
 `LAPolicyDeviceOwnerAuthentication`). The prompt names the secret and where it goes, so the person sees what they
 approve. The value goes to `/dev/tty`, or with `-c` to the clipboard, never to stdout or stderr, which agent
 harnesses and logs capture. An agent cannot answer the prompt, so this keeps the goal of
-[ADR 0001](0001-agents-use-secrets-by-name.md) and is the one exception to its rule that code reads a value only
+[ADR 0001](0001-agents-use-secrets-by-name.md) and is, with the encrypted export of
+[ADR 0006](0006-export-file-sealed-with-a-passphrase.md), an exception to its rule that code reads a value only
 for `ta run`. Talking to LocalAuthentication and the pasteboard needs cgo, so building `ta` needs the Xcode
 command line tools.
 

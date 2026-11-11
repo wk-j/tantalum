@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -23,14 +24,36 @@ func cmdImport(args []string) error {
 	if flags.Arg(0) == "-" && isTerminal(os.Stdin) {
 		return errors.New("refusing to read .env values from a terminal; pipe or redirect a file into `ta import -` instead")
 	}
+	envGiven := false
+	flags.Visit(func(f *flag.Flag) { envGiven = envGiven || f.Name == "e" })
 	// Fail before reading stdin when the vault has not been initialized.
 	v, err := openVault()
 	if err != nil {
 		return err
 	}
-	data, err := readDotenvFile(flags.Arg(0))
+	data, err := readImportFile(flags.Arg(0))
 	if err != nil {
 		return err
+	}
+	if isExportFile(data) {
+		if envGiven {
+			return errors.New("-e applies to .env files; an export file restores the environments it holds")
+		}
+		tty, err := openTerminal()
+		if err != nil {
+			return errors.New("no terminal to ask for the export file's passphrase on; a human runs ta import in their own terminal")
+		}
+		defer tty.Close()
+		passphrase, err := readHidden(tty, "passphrase of the export file (input hidden): ")
+		if err != nil {
+			return err
+		}
+		imported, skipped, envCount, err := v.importExport(data, passphrase, *overwrite)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "imported %d secrets into %d environments; kept %d existing secrets\n", imported, envCount, skipped)
+		return nil
 	}
 	imported, skipped, err := v.importDotenv(flags.env, data, *overwrite)
 	if err != nil {
@@ -40,8 +63,9 @@ func cmdImport(args []string) error {
 	return nil
 }
 
-// readDotenvFile reads values directly into ta, never through a shell or output.
-func readDotenvFile(path string) ([]byte, error) {
+// readImportFile reads a .env or export file directly into ta, never through a
+// shell or output.
+func readImportFile(path string) ([]byte, error) {
 	if path == "-" {
 		return io.ReadAll(os.Stdin)
 	}

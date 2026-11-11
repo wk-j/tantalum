@@ -222,13 +222,13 @@ func TestImportDotenvConcurrentImportsKeepTheFirstValue(t *testing.T) {
 	}
 }
 
-func TestReadDotenvFileAndStdin(t *testing.T) {
+func TestReadImportFileAndStdin(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "input.env")
 	const input = "A=file-value\nB='multi\nline'\n"
 	if err := os.WriteFile(path, []byte(input), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	data, err := readDotenvFile(path)
+	data, err := readImportFile(path)
 	if err != nil || string(data) != input {
 		t.Fatalf("file input = %q, %v", data, err)
 	}
@@ -240,17 +240,17 @@ func TestReadDotenvFileAndStdin(t *testing.T) {
 	old := os.Stdin
 	os.Stdin = f
 	t.Cleanup(func() { os.Stdin = old })
-	data, err = readDotenvFile("-")
+	data, err = readImportFile("-")
 	if err != nil || string(data) != input {
 		t.Fatalf("stdin input = %q, %v", data, err)
 	}
-	if _, err := readDotenvFile(path + ".missing"); !errors.Is(err, os.ErrNotExist) {
+	if _, err := readImportFile(path + ".missing"); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("missing file = %v, want not found", err)
 	}
 	if err := f.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := readDotenvFile("-"); err == nil {
+	if _, err := readImportFile("-"); err == nil {
 		t.Fatal("closed stdin read succeeded")
 	}
 	after, err := os.ReadFile(path)
