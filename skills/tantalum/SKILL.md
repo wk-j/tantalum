@@ -35,8 +35,9 @@ environments such as `dev` and `prod`. You can use a secret by **name**; you mus
    command in single-quoted `sh -c '...'` so the child shell expands it.
 5. `[REDACTED:ENV/NAME]` in output is expected: it means a secret was used. Do not try to reveal it —
    no `base64`/`rev`/`xxd`, no writing it to files, no `security find-generic-password`, and never
-   `ta reveal`: it is for the human, asks them to approve with Touch ID or their password, and would
-   put the value in your terminal. If a value needs checking, ask the human to do it.
+   `ta reveal` or `ta export`: they are for the human, ask them to approve with Touch ID or their
+   password, and would put the value in your terminal or every value in a file. Never ask for an
+   export file's passphrase. If a value needs checking, ask the human to do it.
 6. If `run` fails with `not in environment "ENV": NAME` or `no environment "ENV"`, or `ta` reports
    there is no vault, stop and ask the human to run `ta init` / `ta set -e ENV NAME` in **their own
    terminal**, or to add it in the web UI they open with `ta serve` — not through you.
@@ -48,6 +49,8 @@ environments such as `dev` and `prod`. You can use a secret by **name**; you mus
 
 ## Notes
 
+- `ta help` prints every command and flag, ending with a short `for AI agents` summary of these
+  rules. Run it when unsure of the syntax instead of guessing.
 - Exit status `125` is an error from `ta` itself (message on stderr); any other status is the
   command's own.
 - Unless your shell runs in a terminal, `ta run` gives the command pipes, not a TTY: no colours or

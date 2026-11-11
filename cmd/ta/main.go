@@ -41,7 +41,13 @@ usage:
   ta import [-e ENV] [-overwrite] FILE
                           import .env secrets from FILE, or - for stdin; keeps
                           existing secrets unless -overwrite is given;
-                          invalid or empty entries fail without storing any
+                          invalid or empty entries fail without storing any.
+                          An export file restores every environment it holds
+                          (no -e) after asking for its passphrase
+  ta export FILE          for humans: after Touch ID (or an Apple Watch or the
+                          login password) writes every secret of the vault to
+                          a new FILE, encrypted with a passphrase you type
+                          twice (at least 12 characters); never overwrites
   ta list                 list environments and secret names, never values
   ta rm [-e ENV] NAME     delete a secret
   ta run [-e ENV] -s SPEC... -- COMMAND [ARGS...]
@@ -74,6 +80,18 @@ configuration:
 
 exit status: ta's own errors exit 125; run exits with COMMAND's status
 (126 not executable, 127 not found, 128+N killed by signal N).
+
+for AI agents:
+  Use a secret by name; its value stays in the command ta runs. Your own shell
+  does not have the variables, so put $VAR inside a single-quoted sh -c:
+    ta run -e dev -s DB_URL -- sh -c 'psql "$DB_URL" -c "select 1"'
+  Output shows every vault value as [REDACTED:ENV/NAME], for example
+  [REDACTED:dev/DB_URL]; that is expected, do not try to recover the value.
+  Never run ta reveal, ta export or ta serve, or ask for the serve URL or an
+  export passphrase: they are for the human, and the URL is a credential.
+  If ta reports no vault, no environment, or a name missing from an environment,
+  stop and ask the human to run ta init or ta set -e ENV NAME in their own
+  terminal, or to add it in the ta serve web UI; never take the value in chat.
 `
 
 func main() {
@@ -90,6 +108,8 @@ func main() {
 		err = cmdSet(args)
 	case "import":
 		err = cmdImport(args)
+	case "export":
+		err = cmdExport(args)
 	case "list":
 		err = cmdList(args)
 	case "rm":

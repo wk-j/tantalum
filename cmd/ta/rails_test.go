@@ -9,7 +9,10 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/pbkdf2"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"go/ast"
@@ -333,13 +336,14 @@ var railsOutputPackages = map[string]bool{
 }
 
 // docs/adr/0001: a value is read only to build the child's environment and the
-// redactor, and only the vault codec serializes value-holding types.
+// redactor, to reveal it, or to check an opened export file; only the vault and
+// export file codecs serialize value-holding types.
 func TestRailsSecretValuesReachOnlyChildEnvAndRedactor(t *testing.T) {
 	p := railsLoad(t)
 	secretType := p.lookup(t, "secret").Type()
 	valueField := p.field(t, "secret", "Value")
-	readers := []string{"cmdRun", "newRedactor", "revealSecret"}
-	codecs := []string{"vault.load", "vault.save"}
+	readers := []string{"cmdRun", "newRedactor", "revealSecret", "openExport"}
+	codecs := []string{"vault.load", "vault.save", "sealExport", "openExport"}
 	p.inspect(func(n ast.Node, fd *ast.FuncDecl) {
 		fn := railsName(fd)
 		switch n := n.(type) {
@@ -522,29 +526,34 @@ func TestRailsRunUsesOnlyTheChosenEnvironment(t *testing.T) {
 }
 
 // docs/adr/0001: `ta set` stores only what readSecretValue read (hidden prompt
-// or stdin), import only a file/stdin reader's bytes, and the web UI only the
-// decoded request body. Keep this test's name in sync with its Krypton check.
+// or stdin), import only a file/stdin reader's bytes (a .env or export file),
+// and the web UI only the decoded request body. Keep this test's name in sync
+// with its Krypton check.
 func TestRailsValuesEnterTheVaultOnlyFromPromptStdinOrRequestBody(t *testing.T) {
 	p := railsLoad(t)
 	readSecretValue := p.lookup(t, "readSecretValue")
-	readDotenvFile := p.lookup(t, "readDotenvFile")
-	imports := 0
+	readImportFile := p.lookup(t, "readImportFile")
+	importers := map[string]int{"importDotenv": 1, "importExport": 0} // which argument holds the file bytes
+	imports := map[string]int{}
 	p.inspect(func(n ast.Node, fd *ast.FuncDecl) {
 		call, ok := n.(*ast.CallExpr)
 		if !ok {
 			return
 		}
 		fn := railsName(fd)
-		if railsIs(p.callee(call), "main", "vault", "importDotenv") {
-			imports++
+		for method, arg := range importers {
+			if !railsIs(p.callee(call), "main", "vault", method) {
+				continue
+			}
+			imports[method]++
 			if fn != "cmdImport" || len(call.Args) != 3 {
 				t.Errorf("%s: only cmdImport may import file/stdin bytes", p.pos(call))
 				return
 			}
-			for _, src := range p.sources(p.defs(fd), call.Args[1], map[types.Object]bool{}) {
+			for _, src := range p.sources(p.defs(fd), call.Args[arg], map[types.Object]bool{}) {
 				c, ok := src.(*ast.CallExpr)
-				if !ok || p.callee(c) != readDotenvFile {
-					t.Errorf("%s: import bytes must come from readDotenvFile, never arguments or flags", p.pos(call))
+				if !ok || p.callee(c) != readImportFile {
+					t.Errorf("%s: import bytes must come from readImportFile, never arguments or flags", p.pos(call))
 				}
 			}
 			return
@@ -574,10 +583,12 @@ func TestRailsValuesEnterTheVaultOnlyFromPromptStdinOrRequestBody(t *testing.T) 
 			t.Errorf("%s: %s stores a secret value; only cmdSet and server.put may", p.pos(call), fn)
 		}
 	})
-	if imports != 1 {
-		t.Errorf("found %d import calls, want one guarded cmdImport call", imports)
+	for method := range importers {
+		if imports[method] != 1 {
+			t.Errorf("found %d vault.%s calls, want one guarded cmdImport call", imports[method], method)
+		}
 	}
-	reader := p.funcDecl(t, "readDotenvFile")
+	reader := p.funcDecl(t, "readImportFile")
 	path := p.info.Defs[reader.Type.Params.List[0].Names[0]]
 	ast.Inspect(reader.Body, func(n ast.Node) bool {
 		ret, ok := n.(*ast.ReturnStmt)
@@ -1148,7 +1159,7 @@ func TestRailsOwnErrorsArePrefixedTa(t *testing.T) {
 		main()
 		return
 	}
-	for _, args := range []string{"no-such-command", "set", "import", "import input.env", "list", "run -s X", "serve -addr 0.0.0.0:0"} {
+	for _, args := range []string{"no-such-command", "set", "import", "import input.env", "export", "export out.ta-export", "list", "run -s X", "serve -addr 0.0.0.0:0"} {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestRailsOwnErrorsArePrefixedTa$")
 		cmd.Env = append(os.Environ(), "TA_RAILS_MAIN_ARGS="+args, "TANTALUM_HOME="+t.TempDir())
 		cmd.Dir = t.TempDir()
@@ -1168,7 +1179,7 @@ func TestRailsOwnErrorsArePrefixedTa(t *testing.T) {
 
 // docs/adr/0002
 func TestRailsDocsInvokeTheCommandAsTa(t *testing.T) {
-	oldName := regexp.MustCompile(`\btantalum\s+(init|set|import|list|rm|run|reveal|serve|help)\b`)
+	oldName := regexp.MustCompile(`\btantalum\s+(init|set|import|export|list|rm|run|reveal|serve|help)\b`)
 	bp, err := build.ImportDir(".", 0)
 	if err != nil {
 		t.Fatal(err)
@@ -1347,5 +1358,404 @@ func TestRailsRevealClipboardClearsOnlyWhenUnchanged(t *testing.T) {
 	}
 	if _, err := copyToClipboard("\xff\xfe not utf-8"); err == nil {
 		t.Error("copied bytes that are not UTF-8 text")
+	}
+}
+
+// railsTerminal is a pseudo-terminal on which lines are already typed, as a
+// person would type passphrases at its prompts.
+func railsTerminal(t *testing.T, lines ...string) *os.File {
+	t.Helper()
+	keyboard, tty, err := openPTY()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { keyboard.Close(); tty.Close() })
+	for _, line := range lines {
+		if _, err := keyboard.Write([]byte(line + "\n")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return tty
+}
+
+// railsConfirm answers the Mac's prompt with answer for the rest of the test.
+func railsConfirm(t *testing.T, answer func(reason string) error) {
+	t.Helper()
+	old := confirmUser
+	t.Cleanup(func() { confirmUser = old })
+	confirmUser = answer
+}
+
+const railsPassphrase = "rails passphrase 1"
+
+// railsSealedExport builds an export file the way released versions wrote it,
+// independent of this package's types.
+func railsSealedExport(t *testing.T, passphrase string, version, iterations int, kdf, plain string) []byte {
+	t.Helper()
+	salt := make([]byte, 16)
+	rand.Read(salt)
+	key, err := pbkdf2.Key(sha256.New, passphrase, salt, iterations, 32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nonce := make([]byte, aead.NonceSize())
+	rand.Read(nonce)
+	raw, err := json.Marshal(map[string]any{
+		"format": "tantalum-export", "version": version, "kdf": kdf, "iterations": iterations,
+		"salt": salt, "nonce": nonce,
+		"ciphertext": aead.Seal(nil, nonce, []byte(plain), fmt.Appendf(nil, "tantalum-export v%d", version)),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+// docs/adr/0006: exportVault seals the vault only after confirmUser approved,
+// and it is the only caller of sealExport; a refused prompt writes nothing.
+func TestRailsExportAsksBeforeSealing(t *testing.T) {
+	p := railsLoad(t)
+	fd := p.funcDecl(t, "exportVault")
+	confirm := p.lookup(t, "confirmUser")
+	sealExport := p.lookup(t, "sealExport")
+
+	var gate token.Pos
+	ast.Inspect(fd.Body, func(n ast.Node) bool {
+		ifs, ok := n.(*ast.IfStmt)
+		if !ok || gate.IsValid() || len(ifs.Body.List) == 0 {
+			return true
+		}
+		init, ok := ifs.Init.(*ast.AssignStmt)
+		if !ok || len(init.Rhs) != 1 {
+			return true
+		}
+		call, ok := ast.Unparen(init.Rhs[0]).(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		if id, ok := ast.Unparen(call.Fun).(*ast.Ident); !ok || p.info.Uses[id] != confirm {
+			return true
+		}
+		if _, ok := ifs.Body.List[len(ifs.Body.List)-1].(*ast.ReturnStmt); ok {
+			gate = ifs.End()
+		}
+		return true
+	})
+	if !gate.IsValid() {
+		t.Fatal("exportVault has no `if err := confirmUser(...); err != nil { return ... }`")
+	}
+	sealed := 0
+	p.inspect(func(n ast.Node, enclosing *ast.FuncDecl) {
+		call, ok := n.(*ast.CallExpr)
+		if !ok || p.callee(call) != sealExport {
+			return
+		}
+		sealed++
+		if enclosing != fd {
+			t.Errorf("%s: %s seals an export file; only exportVault may, after the prompt", p.pos(call), railsName(enclosing))
+		} else if call.Pos() < gate {
+			t.Errorf("%s: exportVault seals the vault before confirmUser approved", p.pos(call))
+		}
+	})
+	if sealed != 1 {
+		t.Errorf("found %d sealExport calls, want exactly one in exportVault", sealed)
+	}
+
+	v := railsVault(t, railsKey())
+	if err := v.set("dev", "RAILS", "rails-value"); err != nil {
+		t.Fatal(err)
+	}
+	railsConfirm(t, func(string) error { return fmt.Errorf("Canceled by user.") })
+	path := filepath.Join(t.TempDir(), "out.ta-export")
+	if _, _, err := exportVault(v, path, railsTerminal(t, railsPassphrase, railsPassphrase)); err == nil {
+		t.Fatal("export succeeded although the prompt was refused")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("a refused export left a file: %v", err)
+	}
+}
+
+// docs/adr/0006: an export file holds only its format, version, key derivation
+// settings, salt, nonce and ciphertext, sealed with a fresh salt and nonce
+// under a key that only the passphrase opens.
+func TestRailsExportFileHoldsOnlyCiphertext(t *testing.T) {
+	const env, name, value = "rails_env", "RAILS_NAME", "rails-secret-value"
+	envs := environments{env: {name: {Value: value, Updated: time.Now().UTC()}}}
+	first, err := sealExport(envs, []byte(railsPassphrase))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(first, &fields); err != nil {
+		t.Fatalf("export file is not a JSON envelope: %v", err)
+	}
+	want := []string{"ciphertext", "format", "iterations", "kdf", "nonce", "salt", "version"}
+	if got := slices.Sorted(maps.Keys(fields)); !slices.Equal(got, want) {
+		t.Errorf("export file fields = %v, want %v", got, want)
+	}
+	for _, s := range []string{env, name, value, railsPassphrase} {
+		if bytes.Contains(first, []byte(s)) {
+			t.Errorf("export file contains %q in the clear", s)
+		}
+	}
+	var head struct {
+		Format     string `json:"format"`
+		Version    int    `json:"version"`
+		KDF        string `json:"kdf"`
+		Iterations int    `json:"iterations"`
+		Salt       []byte `json:"salt"`
+		Nonce      []byte `json:"nonce"`
+		Ciphertext []byte `json:"ciphertext"`
+	}
+	if err := json.Unmarshal(first, &head); err != nil {
+		t.Fatal(err)
+	}
+	if head.Format != "tantalum-export" || head.KDF != "pbkdf2-sha256" || head.Iterations < 600_000 || len(head.Salt) < 16 {
+		t.Errorf("export file settings %q v%d %s x%d, %d-byte salt; want tantalum-export, pbkdf2-sha256, at least 600000 iterations and a 16-byte salt",
+			head.Format, head.Version, head.KDF, head.Iterations, len(head.Salt))
+	}
+	key, err := pbkdf2.Key(sha256.New, railsPassphrase, head.Salt, head.Iterations, 32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, err := aead.Open(nil, head.Nonce, head.Ciphertext, fmt.Appendf(nil, "tantalum-export v%d", head.Version))
+	if err != nil {
+		t.Fatalf("AES-256-GCM with the PBKDF2-SHA256 key of the passphrase cannot open the export file: %v", err)
+	}
+	if !bytes.Contains(plain, []byte(value)) {
+		t.Error("decrypted export file does not hold the value")
+	}
+	if _, err := openExport(first, []byte(railsPassphrase+"x")); err == nil {
+		t.Error("another passphrase opened the export file")
+	}
+	second, err := sealExport(envs, []byte(railsPassphrase))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var again struct{ Salt, Nonce []byte }
+	if err := json.Unmarshal(second, &again); err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Equal(head.Salt, again.Salt) || bytes.Equal(head.Nonce, again.Nonce) {
+		t.Error("two exports reused a salt or nonce; every export needs fresh random ones")
+	}
+}
+
+// docs/adr/0006: files written by every released export version load.
+func TestRailsExportFilesOfEveryVersionLoad(t *testing.T) {
+	data := railsSealedExport(t, railsPassphrase, 1, 600_000, "pbkdf2-sha256",
+		`{"envs":{"dev":{"API_KEY":{"value":"dev-value","updated":"2026-10-01T00:00:00Z"}}}}`)
+	envs, err := openExport(data, []byte(railsPassphrase))
+	if err != nil {
+		t.Fatalf("version 1: %v", err)
+	}
+	updated := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	if s := envs["dev"]["API_KEY"]; s.Value != "dev-value" || !s.Updated.Equal(updated) {
+		t.Errorf("version 1: dev/API_KEY = %q updated %v, want dev-value updated %v", s.Value, s.Updated, updated)
+	}
+}
+
+// docs/adr/0006: a passphrase reaches sealExport and vault.importExport only
+// from readHidden on the terminal that openTerminal opened from /dev/tty, never
+// from an argument, a flag, the environment or stdin.
+func TestRailsExportPassphraseComesOnlyFromTheTerminal(t *testing.T) {
+	p := railsLoad(t)
+	openTerm := p.lookup(t, "openTerminal")
+	readHidden := p.lookup(t, "readHidden")
+	exportFd := p.funcDecl(t, "exportVault")
+	exportTTY := p.info.Defs[exportFd.Type.Params.List[len(exportFd.Type.Params.List)-1].Names[0]]
+
+	// fromTerminal reports whether every source of e is openTerminal() or,
+	// inside exportVault, its tty parameter.
+	fromTerminal := func(d railsDefs, fd *ast.FuncDecl, e ast.Expr) bool {
+		srcs := p.sources(d, e, map[types.Object]bool{})
+		for _, src := range srcs {
+			if id, ok := src.(*ast.Ident); ok && fd == exportFd && p.info.Uses[id] == exportTTY {
+				continue
+			}
+			c, ok := src.(*ast.CallExpr)
+			if !ok {
+				return false
+			}
+			if id, ok := ast.Unparen(c.Fun).(*ast.Ident); !ok || p.info.Uses[id] != openTerm {
+				return false
+			}
+		}
+		return len(srcs) > 0
+	}
+	// typed reports whether every source of e is readHidden on the terminal.
+	typed := func(d railsDefs, fd *ast.FuncDecl, e ast.Expr) bool {
+		srcs := p.sources(d, e, map[types.Object]bool{})
+		for _, src := range srcs {
+			c, ok := src.(*ast.CallExpr)
+			if !ok || p.callee(c) != readHidden || !fromTerminal(d, fd, c.Args[0]) {
+				return false
+			}
+		}
+		return len(srcs) > 0
+	}
+	checks := []struct {
+		pkg, recv, name string
+		arg             int
+		check           func(railsDefs, *ast.FuncDecl, ast.Expr) bool
+		want            string
+	}{
+		{"main", "", "sealExport", 1, typed, "readHidden on the terminal"},
+		{"main", "vault", "importExport", 1, typed, "readHidden on the terminal"},
+		{"main", "", "exportVault", 2, fromTerminal, "openTerminal()"},
+	}
+	p.inspect(func(n ast.Node, fd *ast.FuncDecl) {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return
+		}
+		for _, c := range checks {
+			if railsIs(p.callee(call), c.pkg, c.recv, c.name) && !c.check(p.defs(fd), fd, call.Args[c.arg]) {
+				t.Errorf("%s: %s passes %s to %s; it must come from %s", p.pos(call), railsName(fd), p.describe(call.Args[c.arg]), c.name, c.want)
+			}
+		}
+	})
+
+	opensTTY := false
+	p.inspect(func(n ast.Node, fd *ast.FuncDecl) {
+		spec, ok := n.(*ast.ValueSpec)
+		if !ok || fd != nil {
+			return
+		}
+		for i, name := range spec.Names {
+			if p.info.Defs[name] != openTerm || i >= len(spec.Values) {
+				continue
+			}
+			ast.Inspect(spec.Values[i], func(m ast.Node) bool {
+				c, ok := m.(*ast.CallExpr)
+				if ok && railsIs(p.callee(c), "os", "", "OpenFile") && len(c.Args) > 0 {
+					if lit, ok := ast.Unparen(c.Args[0]).(*ast.BasicLit); ok && lit.Value == `"/dev/tty"` {
+						opensTTY = true
+					}
+				}
+				return true
+			})
+		}
+	})
+	if !opensTTY {
+		t.Error("openTerminal is not initialised to open /dev/tty")
+	}
+}
+
+// docs/adr/0006: ta export creates a new file readable only by its owner and
+// never replaces one, and never writes to stdout.
+func TestRailsExportNeverReplacesAFile(t *testing.T) {
+	if err := cmdExport([]string{"-"}); err == nil || !strings.Contains(err.Error(), "usage") {
+		t.Errorf("ta export - = %v, want a usage error: an export never goes to stdout", err)
+	}
+	v := railsVault(t, railsKey())
+	if err := v.set("dev", "RAILS", "rails-value"); err != nil {
+		t.Fatal(err)
+	}
+	railsConfirm(t, func(string) error { return nil })
+	dir := t.TempDir()
+	existing := filepath.Join(dir, "existing")
+	if err := os.WriteFile(existing, []byte("keep me"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdExport([]string{existing}); err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("ta export onto an existing file = %v, want a refusal before anything else", err)
+	}
+	if _, _, err := exportVault(v, existing, railsTerminal(t, railsPassphrase, railsPassphrase)); err == nil {
+		t.Error("exportVault replaced an existing file")
+	}
+	if data, _ := os.ReadFile(existing); string(data) != "keep me" {
+		t.Errorf("existing file now holds %q", data)
+	}
+	created := filepath.Join(dir, "new.ta-export")
+	if _, _, err := exportVault(v, created, railsTerminal(t, railsPassphrase, railsPassphrase)); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(created); err != nil || info.Mode().Perm() != 0o600 {
+		t.Errorf("export file mode = %v (%v), want 0600", info, err)
+	}
+}
+
+// docs/adr/0006: importing an export file checks all of it before one locked
+// write; a wrong passphrase, a damaged file, unknown settings or an invalid
+// entry import nothing, and errors name no secret.
+func TestRailsImportExportValidatesEverythingBeforeOneWrite(t *testing.T) {
+	good := `{"envs":{"dev":{"OK":{"value":"private-value","updated":"2026-10-01T00:00:00Z"}}}}`
+	var fields map[string]any
+	if err := json.Unmarshal(railsSealedExport(t, railsPassphrase, 1, 600_000, "pbkdf2-sha256", good), &fields); err != nil {
+		t.Fatal(err)
+	}
+	ciphertext, err := base64.StdEncoding.DecodeString(fields["ciphertext"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ciphertext[0] ^= 1
+	fields["ciphertext"] = ciphertext
+	tampered, err := json.Marshal(fields)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name       string
+		data       []byte
+		passphrase string
+	}{
+		{"wrong passphrase", railsSealedExport(t, railsPassphrase, 1, 600_000, "pbkdf2-sha256", good), railsPassphrase + "x"},
+		{"damaged file", tampered, railsPassphrase},
+		{"future version", railsSealedExport(t, railsPassphrase, 2, 600_000, "pbkdf2-sha256", good), railsPassphrase},
+		{"too few iterations", railsSealedExport(t, railsPassphrase, 1, 1000, "pbkdf2-sha256", good), railsPassphrase},
+		{"unknown kdf", railsSealedExport(t, railsPassphrase, 1, 600_000, "md5", good), railsPassphrase},
+		{"invalid name", railsSealedExport(t, railsPassphrase, 1, 600_000, "pbkdf2-sha256",
+			`{"envs":{"dev":{"OK":{"value":"private-value"},"9PRIVATE":{"value":"private-value"}}}}`), railsPassphrase},
+		{"empty value", railsSealedExport(t, railsPassphrase, 1, 600_000, "pbkdf2-sha256",
+			`{"envs":{"dev":{"OK":{"value":"private-value"},"PRIVATE_EMPTY":{"value":""}}}}`), railsPassphrase},
+		{"invalid environment", railsSealedExport(t, railsPassphrase, 1, 600_000, "pbkdf2-sha256",
+			`{"envs":{"dev":{"OK":{"value":"private-value"}},"private/env":{"OK":{"value":"private-value"}}}}`), railsPassphrase},
+		{"empty environment", railsSealedExport(t, railsPassphrase, 1, 600_000, "pbkdf2-sha256",
+			`{"envs":{"dev":{"OK":{"value":"private-value"}},"private-env":{}}}`), railsPassphrase},
+		{"no secrets", railsSealedExport(t, railsPassphrase, 1, 600_000, "pbkdf2-sha256", `{"envs":{}}`), railsPassphrase},
+		{"not JSON inside", railsSealedExport(t, railsPassphrase, 1, 600_000, "pbkdf2-sha256", `private-value`), railsPassphrase},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			v := railsVault(t, railsKey())
+			if err := v.set("dev", "KEEP", "keep-value"); err != nil {
+				t.Fatal(err)
+			}
+			before, err := os.ReadFile(filepath.Join(v.dir, vaultFile))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, overwrite := range []bool{false, true} {
+				_, _, _, err := v.importExport(tc.data, []byte(tc.passphrase), overwrite)
+				if err == nil {
+					t.Fatal("import succeeded")
+				}
+				for _, s := range []string{"private", "PRIVATE"} {
+					if strings.Contains(err.Error(), s) {
+						t.Errorf("error names a secret: %v", err)
+					}
+				}
+			}
+			if after, _ := os.ReadFile(filepath.Join(v.dir, vaultFile)); !bytes.Equal(before, after) {
+				t.Error("a rejected export file changed the vault")
+			}
+		})
 	}
 }
