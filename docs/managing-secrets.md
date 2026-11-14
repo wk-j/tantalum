@@ -1,7 +1,7 @@
 # Managing secrets
 
 Commands for the human who owns the vault. Agents use secrets through `ta run`; see
-[agents.md](agents.md).
+[for-agents.md](for-agents.md).
 
 ```sh
 ta init                            # once per vault: creates it and its Keychain key

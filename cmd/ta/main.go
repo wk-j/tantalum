@@ -67,6 +67,17 @@ usage:
                           only; default 127.0.0.1:7340, or a free port when
                           that is taken); open the printed URL, which carries
                           this run's access token
+  ta skill setup [-agent AGENT]... [-dry-run] [-force]
+                          give coding agents the skill that teaches them to use
+                          ta: into the agents found (claude, codex, opencode,
+                          pi, omp) or each -agent; -force replaces something
+                          else installed under the name tantalum
+  ta skill status         for each agent: found, and its skill current,
+                          outdated, missing, foreign or unreadable
+  ta skill remove [-agent AGENT]... [-dry-run]
+                          remove tantalum's skill from every agent, or from
+                          each -agent
+  ta skill show           print the guide the skill gives agents
 
 -e ENV picks an environment: a named set of secrets such as dev or prod
 (default "default"). An environment exists while it holds secrets.
@@ -92,6 +103,7 @@ for AI agents:
   If ta reports no vault, no environment, or a name missing from an environment,
   stop and ask the human to run ta init or ta set -e ENV NAME in their own
   terminal, or to add it in the ta serve web UI; never take the value in chat.
+  ta skill show prints the full guide.
 `
 
 func main() {
@@ -123,6 +135,8 @@ func main() {
 		err = cmdServe(args)
 	case "reveal":
 		err = cmdReveal(args)
+	case "skill":
+		err = cmdSkill(args)
 	case clearClipboardCommand:
 		err = cmdClearClipboard(args)
 	case "help", "-h", "--help":

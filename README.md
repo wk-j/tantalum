@@ -27,6 +27,7 @@ In your own terminal:
 ta init                  # once per vault: creates it and its Keychain key
 ta set GITHUB_TOKEN      # hidden prompt; the value is never an argument
 ta serve                 # or manage secrets in a web UI; open the printed URL
+ta skill setup           # teach your coding agents to use ta (Claude Code, Codex, OpenCode, Pi, omp)
 ```
 
 What the agent runs:
@@ -35,14 +36,18 @@ What the agent runs:
 ta run -s GITHUB_TOKEN -- gh api user   # the secret is a variable of gh only; its value is redacted from the output
 ```
 
-Then [give your agent the skill](docs/agents.md#give-your-agent-the-skill), so it uses secrets this way
-on its own.
+The skill makes agents use secrets this way on their own; see
+[give your agent the skill](docs/for-agents.md#give-your-agent-the-skill).
 
 ## Documentation
 
 - [Managing secrets](docs/managing-secrets.md): every command, importing `.env` files, moving and removing a vault
-- [Agents](docs/agents.md): `ta run`, the agent skill, exit status
+- [For agents](docs/for-agents.md): `ta run`, the agent skill, exit status
 - [How it works](docs/how-it-works.md): vaults, projects, environments, the web UI
 - [Threat model](docs/threat-model.md): what `ta` protects against, and what it does not
 - [Development](docs/development.md): tests, code layout, releasing to Homebrew
 - [Decisions](docs/adr/): ADRs
+
+## License
+
+[MIT](LICENSE)
