@@ -47,3 +47,7 @@ The skill makes agents use secrets this way on their own; see
 - [Threat model](docs/threat-model.md): what `ta` protects against, and what it does not
 - [Development](docs/development.md): tests, code layout, releasing to Homebrew
 - [Decisions](docs/adr/): ADRs
+
+## License
+
+[MIT](LICENSE)
