@@ -9,6 +9,11 @@ clipboard. Decisions are ADRs in [adr/](adr/). The web UI is plain ES modules in
 the binary with no build step; the header of `cmd/ta/web/app.js` maps its `lib/`, `components/` and
 `features/`.
 
+The agent skill's guide is `cmd/ta/skill/guide.md`, embedded in the binary and printed by `ta skill show`;
+edit the rules there. `cmd/ta/skill/stub.md` is the `SKILL.md` that `ta skill setup` installs, and
+`skills/tantalum/SKILL.md` is a copy of it for tools that install skills from a repository; a test fails
+when the two differ.
+
 ## Release to Homebrew
 
 The formula is `Formula/tantalum.rb` in [wk-j/homebrew-tap](https://github.com/wk-j/homebrew-tap). It builds

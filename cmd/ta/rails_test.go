@@ -1159,7 +1159,7 @@ func TestRailsOwnErrorsArePrefixedTa(t *testing.T) {
 		main()
 		return
 	}
-	for _, args := range []string{"no-such-command", "set", "import", "import input.env", "export", "export out.ta-export", "list", "run -s X", "serve -addr 0.0.0.0:0"} {
+	for _, args := range []string{"no-such-command", "set", "import", "import input.env", "export", "export out.ta-export", "list", "run -s X", "serve -addr 0.0.0.0:0", "skill", "skill setup -agent nope"} {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestRailsOwnErrorsArePrefixedTa$")
 		cmd.Env = append(os.Environ(), "TA_RAILS_MAIN_ARGS="+args, "TANTALUM_HOME="+t.TempDir())
 		cmd.Dir = t.TempDir()
@@ -1179,7 +1179,7 @@ func TestRailsOwnErrorsArePrefixedTa(t *testing.T) {
 
 // docs/adr/0002
 func TestRailsDocsInvokeTheCommandAsTa(t *testing.T) {
-	oldName := regexp.MustCompile(`\btantalum\s+(init|set|import|export|list|rm|run|reveal|serve|help)\b`)
+	oldName := regexp.MustCompile(`\btantalum\s+(init|set|import|export|list|rm|run|reveal|serve|skill|help)\b`)
 	bp, err := build.ImportDir(".", 0)
 	if err != nil {
 		t.Fatal(err)
@@ -1188,7 +1188,7 @@ func TestRailsDocsInvokeTheCommandAsTa(t *testing.T) {
 	// The guides in docs/; the ADRs under docs/adr record decisions, which may
 	// quote the old name.
 	adrs := filepath.Join("..", "..", "docs", "adr")
-	for _, root := range []string{"web", filepath.Join("..", "..", "skills"), filepath.Join("..", "..", "docs")} {
+	for _, root := range []string{"web", "skill", filepath.Join("..", "..", "skills"), filepath.Join("..", "..", "docs")} {
 		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 			if err == nil && d.IsDir() && path == adrs {
 				return filepath.SkipDir
