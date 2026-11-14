@@ -1185,8 +1185,14 @@ func TestRailsDocsInvokeTheCommandAsTa(t *testing.T) {
 		t.Fatal(err)
 	}
 	paths := append([]string{filepath.Join("..", "..", "README.md")}, append(bp.GoFiles, bp.CgoFiles...)...)
-	for _, root := range []string{"web", filepath.Join("..", "..", "skills")} {
+	// The guides in docs/; the ADRs under docs/adr record decisions, which may
+	// quote the old name.
+	adrs := filepath.Join("..", "..", "docs", "adr")
+	for _, root := range []string{"web", filepath.Join("..", "..", "skills"), filepath.Join("..", "..", "docs")} {
 		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err == nil && d.IsDir() && path == adrs {
+				return filepath.SkipDir
+			}
 			if err == nil && !d.IsDir() {
 				paths = append(paths, path)
 			}
